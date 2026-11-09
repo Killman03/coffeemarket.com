@@ -12,5 +12,6 @@ jobs:
       - run: npm ci
       - run: npm test
       - run: npm run typecheck
+      - run: npm run build:widget
       - run: npm run build:portable
       - run: npm run build

@@ -1,4 +1,5 @@
 "use client";
+import styles from "./Calculator.module.css";
 import { lazy, Suspense } from "react";
 import { ArrowDownRight, ArrowUpRight, Info, TrendingUp } from "lucide-react";
 import type { CalculatorInput, Calculation } from "../domain/calculator";
@@ -11,42 +12,52 @@ const ProfitChart = lazy(() =>
 export function Summary({ result }: { result: Calculation | null }) {
   return (
     <section
-      className="summary-grid"
+      className={styles["summary-grid"]}
       aria-label="Основные показатели"
       aria-live="polite"
       aria-atomic="true"
     >
-      <article className="summary-card">
-        <div className="metric-label">
-          Себестоимость чашки <span className="metric-icon">◎</span>
+      <article className={styles["summary-card"]}>
+        <div className={styles["metric-label"]}>
+          Себестоимость чашки <span className={styles["metric-icon"]}>◎</span>
         </div>
-        <div className="metric-value">
+        <div className={styles["metric-value"]}>
           {money(result?.productionCost ?? null)} <small>сом</small>
         </div>
-        <div className="metric-note">Ингредиенты, потери и упаковка</div>
+        <div className={styles["metric-note"]}>
+          Ингредиенты, потери и упаковка
+        </div>
       </article>
       <article
-        className={`summary-card featured${result && result.profit < 0 ? " loss-card" : ""}`}
+        className={[
+          styles["summary-card"],
+          styles.featured,
+          result && result.profit < 0 ? styles["loss-card"] : "",
+        ]
+          .filter(Boolean)
+          .join(" ")}
       >
-        <div className="metric-label">
+        <div className={styles["metric-label"]}>
           {result && result.profit < 0
             ? "Прогноз убытка / месяц"
             : "Потенциальная прибыль / месяц"}{" "}
           <TrendingUp size={17} />
         </div>
-        <div className="metric-value" data-testid="monthly-profit">
+        <div className={styles["metric-value"]} data-testid="monthly-profit">
           {money(result?.profit ?? null)} <small>сом</small>
         </div>
-        <div className="metric-note">После всех указанных расходов</div>
-      </article>
-      <article className="summary-card">
-        <div className="metric-label">
-          Точка безубыточности <span className="metric-icon">↗</span>
+        <div className={styles["metric-note"]}>
+          После всех указанных расходов
         </div>
-        <div className="metric-value">
+      </article>
+      <article className={styles["summary-card"]}>
+        <div className={styles["metric-label"]}>
+          Точка безубыточности <span className={styles["metric-icon"]}>↗</span>
+        </div>
+        <div className={styles["metric-value"]}>
           {integer(result?.breakEvenPerDay ?? null)} <small>чашек / день</small>
         </div>
-        <div className="metric-note">
+        <div className={styles["metric-note"]}>
           {result?.breakEvenCups === null
             ? "Недостижима при текущей цене"
             : `${integer(result?.breakEvenCups ?? null)} чашек за рабочий месяц`}
@@ -64,24 +75,24 @@ export function Results({
   result: Calculation;
 }) {
   const parts = [
-    { label: "Кофе", value: result.parts.coffee, color: "#385644" },
-    { label: "Молоко", value: result.parts.milk, color: "#91a27b" },
+    { label: "Кофе", value: result.parts.coffee, color: "#5c3a29" },
+    { label: "Молоко", value: result.parts.milk, color: "#ba884d" },
     { label: "Сироп", value: result.parts.syrup, color: "#b59873" },
     { label: "Упаковка", value: result.parts.packaging, color: "#d7c6a8" },
     { label: "Потери сырья", value: result.parts.loss, color: "#e4d9c4" },
-    { label: "Прочие на чашку", value: result.parts.other, color: "#c3cbc0" },
+    { label: "Прочие на чашку", value: result.parts.other, color: "#b8a58f" },
   ];
   return (
-    <aside className="result-column" aria-label="Детали расчёта">
-      <section className="panel breakdown">
-        <div className="panel-heading">
+    <aside className={styles["result-column"]} aria-label="Детали расчёта">
+      <section className={styles["panel"] + " " + styles["breakdown"]}>
+        <div className={styles["panel-heading"]}>
           <h2>Что внутри чашки</h2>
-          <span className="mini-tag">1 порция</span>
+          <span className={styles["mini-tag"]}>1 порция</span>
         </div>
-        <div className="cost-total">
+        <div className={styles["cost-total"]}>
           {money(result.productionCost)} <small>сом</small>
         </div>
-        <div className="cost-bar" aria-hidden="true">
+        <div className={styles["cost-bar"]} aria-hidden="true">
           {parts.map((p) => (
             <span
               key={p.label}
@@ -89,7 +100,7 @@ export function Results({
             />
           ))}
         </div>
-        <dl className="breakdown-list">
+        <dl className={styles["breakdown-list"]}>
           {parts.map((p) => (
             <div key={p.label}>
               <dt>
@@ -102,12 +113,12 @@ export function Results({
             </div>
           ))}
         </dl>
-        <div className="contribution-box">
+        <div className={styles["contribution-box"]}>
           <span>Маржинальная прибыль с чашки</span>
           <strong>{money(result.contribution)} сом</strong>
           <small>Цена − себестоимость − комиссии − налог с выручки</small>
         </div>
-        <div className="ratio-row">
+        <div className={styles["ratio-row"]}>
           <div>
             <span>Маржинальность</span>
             <strong>
@@ -124,12 +135,14 @@ export function Results({
           </div>
         </div>
       </section>
-      <section className="panel forecast">
-        <div className="panel-heading">
+      <section className={styles["panel"] + " " + styles["forecast"]}>
+        <div className={styles["panel-heading"]}>
           <h2>Месяц в цифрах</h2>
-          <span className="mini-tag">{input.daysPerMonth} рабочих дней</span>
+          <span className={styles["mini-tag"]}>
+            {input.daysPerMonth} рабочих дней
+          </span>
         </div>
-        <dl className="monthly-list">
+        <dl className={styles["monthly-list"]}>
           <div>
             <dt>Продано чашек</dt>
             <dd>{integer(result.volume)}</dd>
@@ -149,7 +162,14 @@ export function Results({
             <dt>Постоянные расходы</dt>
             <dd>−{money(result.fixedCosts)} сом</dd>
           </div>
-          <div className={`profit-row${result.profit < 0 ? " negative" : ""}`}>
+          <div
+            className={[
+              styles["profit-row"],
+              result.profit < 0 ? styles.negative : "",
+            ]
+              .filter(Boolean)
+              .join(" ")}
+          >
             <dt>
               {result.profit < 0
                 ? "Потенциальный убыток"
@@ -158,7 +178,7 @@ export function Results({
             <dd>{money(result.profit)} сом</dd>
           </div>
         </dl>
-        <div className="inline-note">
+        <div className={styles["inline-note"]}>
           <Info size={16} />
           <span>
             Полная себестоимость с долей постоянных расходов:{" "}
@@ -167,17 +187,19 @@ export function Results({
           </span>
         </div>
       </section>
-      <section className="panel">
-        <div className="panel-heading">
+      <section className={styles["panel"]}>
+        <div className={styles["panel-heading"]}>
           <h2>Если продавать больше?</h2>
           <TrendingUp size={17} />
         </div>
         <Suspense
-          fallback={<div className="chart-loading">Загрузка графика…</div>}
+          fallback={
+            <div className={styles["chart-loading"]}>Загрузка графика…</div>
+          }
         >
           <ProfitChart input={input} />
         </Suspense>
-        <table className="scenario-table">
+        <table className={styles["scenario-table"]}>
           <caption>Три сценария спроса</caption>
           <thead>
             <tr>
@@ -190,7 +212,7 @@ export function Results({
             {compareDemand(input).map((s) => (
               <tr
                 key={s.factor}
-                className={s.factor === 1 ? "base-scenario" : ""}
+                className={s.factor === 1 ? styles["base-scenario"] : undefined}
               >
                 <th scope="row">
                   {s.factor < 1 ? (

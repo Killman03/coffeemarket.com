@@ -1,4 +1,5 @@
 "use client";
+import styles from "./Calculator.module.css";
 import {
   CartesianGrid,
   Line,
@@ -21,7 +22,7 @@ export function ProfitChart({ input }: { input: CalculatorInput }) {
   });
   return (
     <div
-      className="chart"
+      className={styles["chart"]}
       role="img"
       aria-label="График месячной прибыли по количеству чашек в день. Точные значения приведены в таблице сценариев."
     >
@@ -32,20 +33,20 @@ export function ProfitChart({ input }: { input: CalculatorInput }) {
         >
           <CartesianGrid
             vertical={false}
-            stroke="#e8ece7"
+            stroke="#eee4d6"
             strokeDasharray="4 4"
           />
           <XAxis
             dataKey="cups"
             tickLine={false}
             axisLine={false}
-            tick={{ fontSize: 11, fill: "#7a837c" }}
+            tick={{ fontSize: 11, fill: "#86796b" }}
           />
           <YAxis
             width={58}
             tickLine={false}
             axisLine={false}
-            tick={{ fontSize: 10, fill: "#7a837c" }}
+            tick={{ fontSize: 10, fill: "#86796b" }}
             tickFormatter={(v: number) => `${Math.round(v / 1000)} тыс.`}
           />
           <Tooltip
@@ -56,20 +57,20 @@ export function ProfitChart({ input }: { input: CalculatorInput }) {
             labelFormatter={(v) => `${v} чашек / день`}
             contentStyle={{
               borderRadius: 12,
-              border: "1px solid #e0e6de",
+              border: "1px solid #e9dece",
               fontSize: 12,
             }}
           />
-          <ReferenceLine y={0} stroke="#9ba999" />
+          <ReferenceLine y={0} stroke="#b8a58f" />
           <ReferenceLine
             x={input.cupsPerDay}
-            stroke="#b6cda9"
+            stroke="#dec2a1"
             strokeDasharray="4 4"
           />
           <Line
             type="linear"
             dataKey="profit"
-            stroke="#43764b"
+            stroke="#9a602b"
             strokeWidth={3}
             dot={false}
             activeDot={{ r: 5 }}
@@ -77,7 +78,7 @@ export function ProfitChart({ input }: { input: CalculatorInput }) {
           />
         </LineChart>
       </ResponsiveContainer>
-      <div className="chart-caption">Объём продаж, чашек в день</div>
+      <div className={styles["chart-caption"]}>Объём продаж, чашек в день</div>
     </div>
   );
 }

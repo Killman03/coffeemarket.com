@@ -1,6 +1,6 @@
 {
   "name": "coffee-market-calculator",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "private": true,
   "engines": {
     "node": "^22.13.0 || ^24.0.0 || >=26.0.0"
@@ -14,7 +14,8 @@
     "typecheck": "tsc --noEmit",
     "build:portable": "next build && node scripts/prepare-standalone.mjs",
     "start:portable": "node .next-node/standalone/server.js",
-    "format": "prettier --write src app ARCHITECTURE.md DEPLOYMENT.md README.md"
+    "format": "prettier --write src app ARCHITECTURE.md DEPLOYMENT.md README.md",
+    "build:widget": "vite build --config vite.widget.config.ts && node scripts/prepare-widget.mjs"
   },
   "dependencies": {
     "@hookform/resolvers": "^5.7.1",
@@ -25,7 +26,9 @@
     "react-hook-form": "^7.85.0",
     "recharts": "^3.8.0",
     "zod": "^4.6.7",
-    "decimal.js": "^10.6.0"
+    "decimal.js": "^10.6.0",
+    "@fontsource/montserrat": "5.3.0",
+    "@fontsource/roboto": "5.3.0"
   },
   "devDependencies": {
     "@cloudflare/vite-plugin": "1.67.0",

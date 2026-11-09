@@ -3,6 +3,7 @@ node_modules
 .next
 .next-node
 dist
+widget-dist
 .wrangler
 .sites-runtime
 coverage

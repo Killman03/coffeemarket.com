@@ -1,4 +1,6 @@
 "use client";
+import styles from "./Calculator.module.css";
+import { useId } from "react";
 import { useFormContext } from "react-hook-form";
 import type { CalculatorInput } from "../domain/calculator";
 type Props = {
@@ -21,13 +23,18 @@ export function NumberField({
     register,
     formState: { errors },
   } = useFormContext<CalculatorInput>();
+  const id = useId();
   const error = errors[name]?.message;
   return (
-    <div className="field">
-      <label htmlFor={name}>{label}</label>
-      <div className={`input-wrap${error ? " invalid" : ""}`}>
+    <div className={styles["field"]}>
+      <label htmlFor={id}>{label}</label>
+      <div
+        className={[styles["input-wrap"], error ? styles.invalid : ""]
+          .filter(Boolean)
+          .join(" ")}
+      >
         <input
-          id={name}
+          id={id}
           type="number"
           inputMode={integer ? "numeric" : "decimal"}
           min="0"
@@ -35,21 +42,21 @@ export function NumberField({
           {...register(name, { valueAsNumber: true })}
           aria-invalid={Boolean(error)}
           aria-describedby={[
-            `${name}-unit`,
-            error ? `${name}-error` : hint ? `${name}-hint` : "",
+            `${id}-unit`,
+            error ? `${id}-error` : hint ? `${id}-hint` : "",
           ]
             .filter(Boolean)
             .join(" ")}
         />
-        <span id={`${name}-unit`}>{unit}</span>
+        <span id={`${id}-unit`}>{unit}</span>
       </div>
       {error ? (
-        <span className="field-error" id={`${name}-error`}>
+        <span className={styles["field-error"]} id={`${id}-error`}>
           {error}
         </span>
       ) : (
         hint && (
-          <span className="field-hint" id={`${name}-hint`}>
+          <span className={styles["field-hint"]} id={`${id}-hint`}>
             {hint}
           </span>
         )

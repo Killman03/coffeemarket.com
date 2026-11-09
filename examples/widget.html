@@ -1,0 +1,35 @@
+<!doctype html>
+<html lang="ru">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Встраивание калькулятора CoffeeMarket</title>
+    <link rel="stylesheet" href="./coffee-market-calculator.css" />
+    <style>
+      body { margin: 0; font: 16px/1.5 Arial, sans-serif; color: #33211d; background: #fffbf2; }
+      .host-header { padding: 24px; background: #2d1f1e; color: white; }
+      .host-content { max-width: 1180px; margin: 0 auto; padding: 24px; }
+      .host-header h1 { margin: 0; font-size: 25px; }
+      /* Deliberately common host selectors: the widget must coexist with these. */
+      .panel { border: 3px dashed #834e26; padding: 18px; }
+      .selected { background: #ddd; }
+      button { border-radius: 0; text-transform: uppercase; }
+      input { border: 3px solid red; }
+    </style>
+  </head>
+  <body>
+    <header class="host-header"><h1>COFFEEMARKET.KG</h1></header>
+    <main class="host-content">
+      <h2>Калькулятор для вашего бизнеса</h2>
+      <div id="coffee-calculator"></div>
+      <p class="panel" id="host-isolation-check">Этот блок принадлежит сайту. Стили калькулятора его не меняют.</p>
+    </main>
+    <script type="module">
+      import { mountCoffeeCalculator } from './coffee-market-calculator.js';
+      const unmount = mountCoffeeCalculator(document.getElementById('coffee-calculator'), {
+        headingLevel: 2,
+      });
+      // Call unmount() when a client-side router removes this page.
+    </script>
+  </body>
+</html>

@@ -1,6 +1,6 @@
-import { Calculator } from "../src/presentation/Calculator";
+import { StorefrontPreview } from "../src/presentation/StorefrontPreview";
 import { catalogRepository } from "../src/infrastructure/catalog-repository";
 
 export default function Home() {
-  return <Calculator catalog={catalogRepository.getCatalog()} />;
+  return <StorefrontPreview catalog={catalogRepository.getCatalog()} />;
 }

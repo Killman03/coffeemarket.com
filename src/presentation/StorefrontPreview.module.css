@@ -1,0 +1,205 @@
+.page {
+  min-height: 100vh;
+  background: #fffbf2;
+  color: #33211d;
+  font-family: Montserrat, "Segoe UI", Arial, sans-serif;
+  font-size: 14px;
+  line-height: 1.5;
+}
+.page * {
+  box-sizing: border-box;
+}
+.header {
+  background: #2d1f1e;
+  color: #fff;
+}
+.headerInner {
+  max-width: 1200px;
+  padding: 24px 28px;
+  margin: 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 24px;
+}
+.brand {
+  font-family: Roboto, "Segoe UI", Arial, sans-serif;
+  font-size: 26px;
+  font-weight: 700;
+  letter-spacing: -0.7px;
+  line-height: 1.1;
+  color: #fff;
+  text-decoration: none;
+}
+.brand span {
+  display: block;
+  font-family: Montserrat, "Segoe UI", Arial, sans-serif;
+  font-size: 8px;
+  letter-spacing: 2.1px;
+  font-weight: 400;
+  color: #d2bfa6;
+  margin-top: 8px;
+}
+.header nav {
+  display: flex;
+  gap: 28px;
+}
+.header nav a {
+  font-size: 12px;
+  color: #f9f0e2;
+  text-decoration: none;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.header nav a:hover {
+  color: #da9f5b;
+}
+.header a:focus-visible,
+.main a:focus-visible {
+  outline: 3px solid #da9f5b;
+  outline-offset: 5px;
+}
+.main {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 0 28px;
+}
+.breadcrumbs {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 24px 0 0;
+  font-size: 11px;
+  color: #968577;
+}
+.breadcrumbs a {
+  color: #796859;
+  text-decoration: none;
+}
+.breadcrumbs a:hover {
+  color: #9a602b;
+}
+.nextStep {
+  display: flex;
+  align-items: center;
+  gap: 18px;
+  border-top: 1px solid #e7dccb;
+  border-bottom: 1px solid #e7dccb;
+  padding: 28px 0;
+  margin-top: 32px;
+}
+.nextIcon {
+  height: 53px;
+  width: 53px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  background: #f2e7d6;
+  color: #9a602b;
+  flex-shrink: 0;
+}
+.nextStep h2 {
+  font-family: Roboto, "Segoe UI", Arial, sans-serif;
+  font-size: 19px;
+  line-height: 1.4;
+  margin: 0 0 4px;
+  font-weight: 600;
+}
+.nextStep p {
+  color: #867465;
+  font-size: 12px;
+  margin: 0;
+}
+.nextStep > a {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 9px;
+  flex-shrink: 0;
+  padding: 13px 18px;
+  border: 1px solid #bb8d58;
+  border-radius: 6px;
+  color: #573a22;
+  text-decoration: none;
+  font-size: 12px;
+  font-weight: 600;
+  background: #fffdf8;
+}
+.nextStep > a:hover {
+  background: #f3e7d4;
+}
+.footer {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 15px;
+  padding: 22px 0 27px;
+  font-size: 10px;
+  color: #92816f;
+}
+.footer a {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: #7e6551;
+  text-decoration: none;
+}
+@media (max-width: 640px) {
+  .headerInner {
+    padding: 20px;
+    gap: 15px;
+  }
+  .brand {
+    font-size: 21px;
+  }
+  .brand span {
+    font-size: 6px;
+    letter-spacing: 1.3px;
+  }
+  .header nav {
+    gap: 0;
+  }
+  .header nav a {
+    font-size: 10px;
+  }
+  .header nav a:nth-child(-n + 2) {
+    display: none;
+  }
+  .main {
+    padding: 0 16px;
+  }
+  .breadcrumbs {
+    font-size: 10px;
+    padding-top: 20px;
+  }
+  .nextStep {
+    flex-wrap: wrap;
+    gap: 14px;
+    padding: 24px 0;
+    margin-top: 22px;
+  }
+  .nextIcon {
+    display: none;
+  }
+  .nextStep h2 {
+    font-size: 18px;
+  }
+  .nextStep p {
+    font-size: 11px;
+  }
+  .nextStep > a {
+    margin: 0;
+    width: 100%;
+  }
+  .footer {
+    align-items: flex-start;
+    font-size: 9px;
+    gap: 16px;
+  }
+  .footer a {
+    max-width: 190px;
+    text-align: right;
+  }
+}

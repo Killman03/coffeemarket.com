@@ -11,6 +11,7 @@
 
 # Generated builds and framework state
 /dist/
+/widget-dist/
 /.next/
 /.next-node/
 /.vinext/

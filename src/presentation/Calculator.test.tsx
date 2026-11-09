@@ -68,9 +68,7 @@ describe("calculator interactions", () => {
       .spyOn(HTMLAnchorElement.prototype, "click")
       .mockImplementation(() => {});
     renderCalculator();
-    fireEvent.click(
-      screen.getByRole("button", { name: "Экспорт" }),
-    );
+    fireEvent.click(screen.getByRole("button", { name: "Экспорт" }));
     expect(click).toHaveBeenCalledOnce();
     const json = await new Promise<string>((resolve, reject) => {
       const reader = new FileReader();
