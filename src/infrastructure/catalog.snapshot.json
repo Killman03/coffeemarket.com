@@ -1,0 +1,61 @@
+{
+  "source": "CoffeeMarket MCP / get_business_context",
+  "fetchedAt": "2026-11-09T03:44:20.179687+00:00",
+  "currency": "KGS",
+  "products": [
+    {
+      "id": 38,
+      "name": "Gorelka Coffee Roasters Бразилия 1000 гр.",
+      "price": 2199,
+      "packageGrams": 1000,
+      "stock": 0,
+      "url": "https://coffeemarket.kg/products/gorelka-coffee-roasters-braziliya-1000-gr/",
+      "updatedAt": "2026-02-27T23:33:11.373307+06:00"
+    },
+    {
+      "id": 42,
+      "name": "Кофе Giraffe Мока Твист Бразилия 250 гр.",
+      "price": 849,
+      "packageGrams": 250,
+      "stock": 0,
+      "url": "https://coffeemarket.kg/products/kofe-giraffe-moka-tvist-braziliya-250-gr/",
+      "updatedAt": "2026-02-27T23:32:49.522577+06:00"
+    },
+    {
+      "id": 60,
+      "name": "Tasty Coffee вендинг  \"Арома, 40% Робуста\" в зернах 1 кг",
+      "price": 1899,
+      "packageGrams": 1000,
+      "stock": 10,
+      "url": "https://coffeemarket.kg/products/tasty-coffee-espresso-smes-aroma-40-robusta-v-zernah-1-kg/",
+      "updatedAt": "2026-03-28T19:37:05.277869+06:00"
+    },
+    {
+      "id": 61,
+      "name": "TASTY COFFEE Кофе в зернах Бэрри 1 кг",
+      "price": 2449,
+      "packageGrams": 1000,
+      "stock": 9,
+      "url": "https://coffeemarket.kg/products/tasty-coffee-kofe-v-zernah-berri-1-kg/",
+      "updatedAt": "2026-03-02T19:07:41.299513+06:00"
+    },
+    {
+      "id": 100,
+      "name": "Tasty Coffee «Эфиопия Иргачефф Нат» — кофе в зёрнах, 1 кг",
+      "price": 2449,
+      "packageGrams": 1000,
+      "stock": 0,
+      "url": "https://coffeemarket.kg/products/tasty-coffee-efiopiia-irgacheff-nat-kofe-v-zernakh-1-kg/",
+      "updatedAt": "2026-08-31T08:15:36.385846+06:00"
+    },
+    {
+      "id": 110,
+      "name": "Кофе в зернах TASTY COFFEE Милд, 1 кг, арабика 80%/робуста 20%, средняя обжарка",
+      "price": 1900,
+      "packageGrams": 1000,
+      "stock": 0,
+      "url": "https://coffeemarket.kg/products/kofe-v-zernakh-tasty-coffee-mild-1-kg-arabika-80-robusta-20-sredniaia-obzharka/",
+      "updatedAt": "2026-10-17T12:50:11.253158+06:00"
+    }
+  ]
+}
