@@ -3,6 +3,7 @@ import { File as NodeFile } from "node:buffer";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { Calculator } from "./Calculator";
 import { catalogRepository } from "../infrastructure/catalog-repository";
+import { BrowserScenarioStore } from "../infrastructure/scenario-storage";
 import {
   createScenario,
   defaultInput,
@@ -19,6 +20,29 @@ const renderCalculator = () =>
   render(<Calculator catalog={catalogRepository.getCatalog()} />);
 
 describe("calculator interactions", () => {
+  it("opens and resets a populated manual example while preserving explicit saved zero values", async () => {
+    const context = { market: "OTHER", currency: "USD" } as const;
+    const store = new BrowserScenarioStore(window.localStorage);
+    store.save({ ...defaultInput, coffeePrice: 0, salePrice: 0 }, context);
+    store.saveLastContext(context);
+    renderCalculator();
+    await waitFor(() =>
+      expect(screen.getByLabelText("Валюта расчёта")).toHaveValue("USD"),
+    );
+    expect(screen.getByLabelText("Цена кофе")).toHaveValue(0);
+    expect(screen.getByLabelText("Цена продажи чашки")).toHaveValue(0);
+    fireEvent.click(screen.getByRole("button", { name: "Сбросить параметры" }));
+    await waitFor(() =>
+      expect(screen.getByLabelText("Цена кофе")).toHaveValue(20),
+    );
+    expect(screen.getByLabelText("Цена продажи чашки")).toHaveValue(3);
+    expect(screen.getByLabelText("Чашек в день")).toHaveValue(20);
+    expect(screen.getByTestId("monthly-profit")).not.toHaveTextContent(
+      /^0 USD$/,
+    );
+    expect(store.load(context)?.input.salePrice).toBe(0);
+  });
+
   it("imports a valid file using the standard File API", async () => {
     renderCalculator();
     const file = new NodeFile(
@@ -154,7 +178,7 @@ describe("calculator interactions", () => {
     expect(screen.getByLabelText("Цена продажи чашки")).toHaveValue(250);
     fireEvent.click(screen.getByRole("button", { name: /^Перейти$/ }));
     await waitFor(() =>
-      expect(screen.getByLabelText("Цена продажи чашки")).toHaveValue(0),
+      expect(screen.getByLabelText("Цена продажи чашки")).toHaveValue(1000),
     );
     expect(
       screen.queryByLabelText("Кофе из каталога Coffee Market"),

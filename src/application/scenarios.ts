@@ -5,6 +5,7 @@ import {
   type CalculatorInput,
 } from "../domain/calculator";
 import { pricePerKilogram, type Catalog } from "../domain/catalog";
+import { demoPrices } from "./demo-prices";
 import {
   catalogIsCompatible,
   contextSchema,
@@ -89,46 +90,36 @@ export const scenarioSchema = z.union([
 ]);
 export type Scenario = z.infer<typeof scenarioSchema>;
 
-/** Creates an initial scenario without inventing local market prices.
+/** Creates a populated, explicitly illustrative scenario in its own currency.
  *
  * Args:
  *   context: Market and currency of the new scenario.
  *   catalog: Optional validated catalog matching the selected context.
  *
  * Returns:
- *   Existing Kyrgyz demonstration or a manual scenario with zero prices.
+ *   Demonstration inputs; matching catalog prices are used only in KG/KGS.
+ *   Optional unused ingredients and unspecified turnover tax remain zero.
  */
 export function createInitialInput(
   context: MarketContext,
   catalog?: Catalog,
 ): CalculatorInput {
   const validated = contextSchema.parse(context);
-  if (validated.market === "KG" && validated.currency === "KGS") {
-    const product = catalogIsCompatible(validated, catalog)
-      ? catalog?.products.find((item) => item.stock > 0)
-      : undefined;
-    return {
-      ...defaultInput,
-      coffeePrice: product
-        ? pricePerKilogram(product)
-        : defaultInput.coffeePrice,
-    };
-  }
-  return {
+  const initial = {
     ...defaultInput,
-    coffeePrice: 0,
-    milkPrice: 0,
-    syrupPrice: 0,
-    packaging: 0,
-    otherPerCup: 0,
-    salePrice: 0,
-    rent: 0,
-    salaries: 0,
-    utilities: 0,
-    otherFixed: 0,
-    feePercent: 0,
-    turnoverTaxPercent: 0,
+    ...(validated.currency === "KGS" ? {} : demoPrices[validated.currency]),
+    cupsPerDay:
+      validated.market === "KG" && validated.currency === "KGS"
+        ? defaultInput.cupsPerDay
+        : 20,
   };
+  const product = catalogIsCompatible(validated, catalog)
+    ? catalog?.products.find((item) => item.stock > 0)
+    : undefined;
+  return calculatorSchema.parse({
+    ...initial,
+    ...(product ? { coffeePrice: pricePerKilogram(product) } : {}),
+  });
 }
 
 /** Builds demand scenarios through the same calculation use case.

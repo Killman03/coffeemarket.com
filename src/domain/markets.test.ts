@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { calculate, calculatorSchema } from "./calculator";
 import {
   catalogIsCompatible,
   contextSchema,
@@ -46,28 +47,39 @@ describe("market contexts", () => {
     expect(catalogIsCompatible(defaultContext)).toBe(false);
   });
 
-  it("initializes foreign contexts without invented prices or tax rates", () => {
-    const input = createInitialInput(
-      { market: "KZ", currency: "KZT" },
-      catalogRepository.getCatalog(),
-    );
-    expect(input).toMatchObject({
-      coffeePrice: 0,
-      milkPrice: 0,
-      salePrice: 0,
-      rent: 0,
-      salaries: 0,
-      utilities: 0,
-      otherFixed: 0,
-      feePercent: 0,
-      turnoverTaxPercent: 0,
-    });
-    expect(input.dose).toBe(defaultInput.dose);
-    expect(input.daysPerMonth).toBe(defaultInput.daysPerMonth);
-    expect(
-      createInitialInput({ market: "KG", currency: "USD" }).salePrice,
-    ).toBe(0);
-  });
+  it.each(currencies)(
+    "provides a working, nonzero demonstration in $code without asserting a tax regime",
+    ({ code }) => {
+      const input = createInitialInput(
+        { market: "OTHER", currency: code },
+        catalogRepository.getCatalog(),
+      );
+      expect(calculatorSchema.safeParse(input).success).toBe(true);
+      for (const key of [
+        "coffeePrice",
+        "milkPrice",
+        "syrupPrice",
+        "salePrice",
+        "packaging",
+        "otherPerCup",
+        "rent",
+        "salaries",
+        "utilities",
+        "otherFixed",
+      ] as const)
+        expect(input[key]).toBeGreaterThan(0);
+      expect(input.turnoverTaxPercent).toBe(0);
+      expect(input.syrup).toBe(0);
+      expect(input.cupsPerDay).toBe(20);
+      expect(input.dose).toBe(defaultInput.dose);
+      expect(input.daysPerMonth).toBe(defaultInput.daysPerMonth);
+      const result = calculate(input, currencyDigits(code));
+      expect(result.productionCost).toBeGreaterThan(0);
+      expect(result.revenue).toBeGreaterThan(0);
+      expect(result.profit).toBeGreaterThan(0);
+      expect(result.breakEvenPerDay).toBeGreaterThan(0);
+    },
+  );
 
   it("retains the existing explicitly Kyrgyz demonstration", () => {
     expect(createInitialInput(defaultContext)).toEqual(defaultInput);
