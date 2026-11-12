@@ -44,19 +44,21 @@ export const calculatorSchema = z
 
 export type CalculatorInput = z.infer<typeof calculatorSchema>;
 const Money = Decimal.clone({ precision: 32, rounding: Decimal.ROUND_HALF_UP });
-const money = (value: Decimal) => value.toDecimalPlaces(2).toNumber();
 
 /** Calculates one-drink unit economics using decimal arithmetic.
  *
  * Args:
  *   raw: Untrusted scenario values, validated at the domain boundary.
+ *   precision: Currency minor-unit digits; intermediate values stay unrounded.
  *
  * Returns:
- *   Unit costs, monthly results and break-even volume in KGS. Undefined
+ *   Unit costs, monthly results and break-even volume in the scenario currency. Undefined
  *   ratios and unreachable break-even are null. Totals use unrounded costs.
  */
-export function calculate(raw: CalculatorInput) {
+export function calculate(raw: CalculatorInput, precision = 2) {
   const input = calculatorSchema.parse(raw);
+  const digits = z.number().int().min(0).max(3).parse(precision);
+  const money = (value: Decimal) => value.toDecimalPlaces(digits).toNumber();
   const coffee = new Money(input.coffeePrice).times(input.dose).div(1000);
   const milk = new Money(input.milkPrice).times(input.milk).div(1000);
   const syrup = new Money(input.syrupPrice).times(input.syrup).div(1000);

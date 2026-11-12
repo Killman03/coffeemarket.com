@@ -4,6 +4,13 @@ import {
   calculate,
   type CalculatorInput,
 } from "../domain/calculator";
+import { pricePerKilogram, type Catalog } from "../domain/catalog";
+import {
+  catalogIsCompatible,
+  contextSchema,
+  defaultContext,
+  type MarketContext,
+} from "../domain/markets";
 
 export const presets = {
   cappuccino: {
@@ -61,35 +68,107 @@ export const defaultInput: CalculatorInput = {
   turnoverTaxPercent: 0,
 };
 
-export const scenarioSchema = z.object({
+const legacyScenarioSchema = z.object({
   version: z.literal(1),
   savedAt: z.string().datetime(),
   input: calculatorSchema,
 });
+const currentScenarioSchema = z.object({
+  version: z.literal(2),
+  context: contextSchema,
+  savedAt: z.string().datetime(),
+  input: calculatorSchema,
+});
+export const scenarioSchema = z.union([
+  currentScenarioSchema,
+  legacyScenarioSchema.transform((scenario) => ({
+    ...scenario,
+    version: 2 as const,
+    context: { ...defaultContext },
+  })),
+]);
 export type Scenario = z.infer<typeof scenarioSchema>;
+
+/** Creates an initial scenario without inventing local market prices.
+ *
+ * Args:
+ *   context: Market and currency of the new scenario.
+ *   catalog: Optional validated catalog matching the selected context.
+ *
+ * Returns:
+ *   Existing Kyrgyz demonstration or a manual scenario with zero prices.
+ */
+export function createInitialInput(
+  context: MarketContext,
+  catalog?: Catalog,
+): CalculatorInput {
+  const validated = contextSchema.parse(context);
+  if (validated.market === "KG" && validated.currency === "KGS") {
+    const product = catalogIsCompatible(validated, catalog)
+      ? catalog?.products.find((item) => item.stock > 0)
+      : undefined;
+    return {
+      ...defaultInput,
+      coffeePrice: product
+        ? pricePerKilogram(product)
+        : defaultInput.coffeePrice,
+    };
+  }
+  return {
+    ...defaultInput,
+    coffeePrice: 0,
+    milkPrice: 0,
+    syrupPrice: 0,
+    packaging: 0,
+    otherPerCup: 0,
+    salePrice: 0,
+    rent: 0,
+    salaries: 0,
+    utilities: 0,
+    otherFixed: 0,
+    feePercent: 0,
+    turnoverTaxPercent: 0,
+  };
+}
 
 /** Builds demand scenarios through the same calculation use case.
  *
  * Args:
  *   input: Validated base scenario.
+ *   precision: Monetary decimal places for the selected currency.
  *
  * Returns:
  *   Low, base and high demand results with unchanged prices and recipes.
  */
-export function compareDemand(input: CalculatorInput) {
+export function compareDemand(input: CalculatorInput, precision = 2) {
   return [0.8, 1, 1.2].map((factor) => {
     const cupsPerDay = Math.min(10000, Math.round(input.cupsPerDay * factor));
-    return { factor, cupsPerDay, result: calculate({ ...input, cupsPerDay }) };
+    return {
+      factor,
+      cupsPerDay,
+      result: calculate({ ...input, cupsPerDay }, precision),
+    };
   });
 }
 
-/** Serializes a versioned scenario without embedding catalog or credentials. */
+/** Serializes a validated scenario with explicit market and currency.
+ *
+ * Args:
+ *   input: Scenario values to validate and serialize.
+ *   now: Timestamp for deterministic exports and tests.
+ *   context: Explicit monetary context; legacy callers use KG/KGS.
+ *
+ * Returns:
+ *   Current version scenario without catalog data or credentials.
+ */
 export function createScenario(
   input: CalculatorInput,
   now = new Date(),
+  context: MarketContext = defaultContext,
 ): Scenario {
   return scenarioSchema.parse({
-    version: 1,
+    version: 2,
+    context,
     savedAt: now.toISOString(),
     input,
   });

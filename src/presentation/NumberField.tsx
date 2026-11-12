@@ -38,7 +38,7 @@ export function NumberField({
           type="number"
           inputMode={integer ? "numeric" : "decimal"}
           min="0"
-          step={integer ? "1" : "0.01"}
+          step={integer ? "1" : "any"}
           {...register(name, { valueAsNumber: true })}
           aria-invalid={Boolean(error)}
           aria-describedby={[

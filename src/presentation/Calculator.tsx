@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useId, useRef, useState } from "react";
+import { useEffect, useId, useMemo, useRef, useState } from "react";
 import { FormProvider, useForm, useWatch } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import {
@@ -26,14 +26,22 @@ import {
 import { pricePerKilogram, type Catalog } from "../domain/catalog";
 import {
   createScenario,
-  defaultInput,
+  createInitialInput,
   presets,
   scenarioSchema,
 } from "../application/scenarios";
 import { BrowserScenarioStore } from "../infrastructure/scenario-storage";
 import { NumberField } from "./NumberField";
 import { Results, Summary } from "./Results";
-import { formatMoney } from "./format";
+import { createFormatters } from "./format";
+import {
+  catalogIsCompatible,
+  currencyDigits,
+  defaultContext,
+  type MarketContext,
+} from "../domain/markets";
+import { MarketSettings } from "./MarketSettings";
+import { PnlOffer } from "./PnlOffer";
 import styles from "./Calculator.module.css";
 
 /** Composes presentation, validation and use cases without business formulas. */
@@ -41,13 +49,26 @@ export type CalculatorProps = {
   catalog: Catalog;
   showIntro?: boolean;
   headingLevel?: 1 | 2;
+  initialContext?: MarketContext;
+  pnlAnchorId?: string;
 };
 
 export function Calculator({
   catalog,
   showIntro = true,
   headingLevel = 1,
+  initialContext = defaultContext,
+  pnlAnchorId,
 }: CalculatorProps) {
+  const [context, setContext] = useState<MarketContext>(initialContext);
+  const currency = context.currency;
+  const { money: formatMoney } = useMemo(
+    () => createFormatters(currency),
+    [currency],
+  );
+  const compatibleCatalog = catalogIsCompatible(context, catalog);
+  const drafts = useRef(new Map<string, CalculatorInput>());
+  const restored = useRef(false);
   const instanceId = useId();
   const formId = instanceId + "-form";
   const productSelectId = instanceId + "-product";
@@ -57,10 +78,7 @@ export function Calculator({
   const initialProduct =
     catalog.products.find((product) => product.stock > 0) ??
     catalog.products[0];
-  const initialInput = {
-    ...defaultInput,
-    coffeePrice: pricePerKilogram(initialProduct),
-  };
+  const initialInput = createInitialInput(context, catalog);
   const form = useForm<CalculatorInput>({
     defaultValues: initialInput,
     resolver: zodResolver(calculatorSchema),
@@ -69,40 +87,84 @@ export function Calculator({
   const watched = useWatch({ control: form.control });
   const validated = calculatorSchema.safeParse(watched);
   const input = validated.success ? validated.data : null;
-  const result = input ? calculate(input) : null;
+  const result = input ? calculate(input, currencyDigits(currency)) : null;
   const [drink, setDrink] = useState<keyof typeof presets | "custom">(
     "cappuccino",
   );
-  const [productId, setProductId] = useState(String(initialProduct.id));
+  const [productId, setProductId] = useState(
+    compatibleCatalog ? String(initialProduct.id) : "custom",
+  );
   const [notice, setNotice] = useState("");
   const [methodOpen, setMethodOpen] = useState(false);
   const upload = useRef<HTMLInputElement>(null);
-  const selectedProduct = catalog.products.find(
-    (p) => String(p.id) === productId,
-  );
+  const selectedProduct = compatibleCatalog
+    ? catalog.products.find((p) => String(p.id) === productId)
+    : undefined;
   const selectedPrice = selectedProduct
     ? pricePerKilogram(selectedProduct)
     : null;
   const editedPrice = selectedPrice !== watched.coffeePrice;
 
   useEffect(() => {
+    if (restored.current) return;
+    restored.current = true;
     try {
-      const saved = new BrowserScenarioStore(window.localStorage).load();
+      const store = new BrowserScenarioStore(window.localStorage);
+      const savedContext = store.getLastContext() ?? initialContext;
+      const saved = store.load(savedContext);
+      setContext(savedContext);
       if (saved) {
         form.reset(saved.input);
         setDrink("custom");
         setProductId("custom");
         setNotice("Сохранённый расчёт восстановлен на этом устройстве.");
-      }
+      } else form.reset(createInitialInput(savedContext, catalog));
     } catch {
       setNotice("Сохранённый расчёт недоступен. Загружены начальные значения.");
     }
-  }, [form]);
+  }, [form, catalog, initialContext]);
+
+  /** Switches isolated market scenarios without relabeling monetary amounts.
+   *
+   * Args:
+   *   next: Explicitly confirmed target market and currency.
+   */
+  function changeContext(next: MarketContext) {
+    if (!input) {
+      void form.trigger();
+      setNotice(
+        "Исправьте ошибки, чтобы сохранить текущий сценарий перед переходом.",
+      );
+      return;
+    }
+    drafts.current.set(`${context.market}:${currency}`, input);
+    let target = drafts.current.get(`${next.market}:${next.currency}`);
+    let persisted = false;
+    try {
+      const store = new BrowserScenarioStore(window.localStorage);
+      store.save(input, context);
+      target ??= store.load(next)?.input;
+      store.saveLastContext(next);
+      persisted = true;
+    } catch {
+      /* Session drafts remain available when browser storage is disabled. */
+    }
+    form.reset(target ?? createInitialInput(next, catalog));
+    setContext(next);
+    setDrink("custom");
+    setProductId("custom");
+    setNotice(
+      `${target ? "Сценарий восстановлен" : "Создан отдельный сценарий"}. Суммы не конвертировались. Предыдущий расчёт ${persisted ? "сохранён в браузере" : "сохранён до закрытия страницы"}.`,
+    );
+  }
 
   function selectDrink(key: keyof typeof presets) {
     setDrink(key);
     const preset = presets[key];
-    (["dose", "milk", "syrup", "salePrice"] as const).forEach((name) =>
+    (compatibleCatalog
+      ? (["dose", "milk", "syrup", "salePrice"] as const)
+      : (["dose", "milk", "syrup"] as const)
+    ).forEach((name) =>
       form.setValue(name, preset[name], {
         shouldValidate: true,
         shouldDirty: true,
@@ -120,7 +182,9 @@ export function Calculator({
       return;
     }
     try {
-      new BrowserScenarioStore(window.localStorage).save(input);
+      const store = new BrowserScenarioStore(window.localStorage);
+      store.save(input, context);
+      store.saveLastContext(context);
       setNotice("Расчёт сохранён в браузере на этом устройстве.");
     } catch {
       setNotice("Браузер не разрешил сохранение. Используйте экспорт JSON.");
@@ -137,7 +201,7 @@ export function Calculator({
       [
         JSON.stringify(
           {
-            ...createScenario(input),
+            ...createScenario(input, new Date(), context),
             result,
             catalogFetchedAt: catalog.fetchedAt,
           },
@@ -161,6 +225,8 @@ export function Calculator({
     try {
       if (file.size > 100000) throw new Error("File too large");
       const scenario = scenarioSchema.parse(JSON.parse(await file.text()));
+      if (input) drafts.current.set(`${context.market}:${currency}`, input);
+      setContext(scenario.context);
       form.reset(scenario.input);
       setProductId("custom");
       setDrink("custom");
@@ -194,10 +260,10 @@ export function Calculator({
           </p>
           <div className={styles["intro-tags"]}>
             <span>
-              <Check size={14} /> Расчёт в сомах
+              <Check size={14} /> Бесплатно, без регистрации
             </span>
             <span>
-              <Check size={14} /> Цены из каталога CoffeeMarket
+              <Check size={14} /> Ваш рынок и валюта
             </span>
             <span>
               <Check size={14} /> Все параметры можно изменить
@@ -205,12 +271,14 @@ export function Calculator({
           </div>
         </header>
       )}
-      <Summary result={result} />
+      <MarketSettings context={context} onChange={changeContext} />
+      <Summary result={result} currency={currency} />
       <div className={styles["mobile-feedback"]}>
         <div>
           <span>Себестоимость чашки</span>
           <strong>
-            {formatMoney(result?.productionCost ?? null)} <small>сом</small>
+            {formatMoney(result?.productionCost ?? null)}{" "}
+            <small>{currency}</small>
           </strong>
         </div>
         <a href={"#" + resultId}>
@@ -218,7 +286,7 @@ export function Calculator({
             {result && result.profit < 0 ? "Убыток / месяц" : "Прибыль / месяц"}
           </span>
           <strong>
-            {formatMoney(result?.profit ?? null)} <small>сом</small>
+            {formatMoney(result?.profit ?? null)} <small>{currency}</small>
             <ArrowRight size={16} />
           </strong>
         </a>
@@ -233,7 +301,9 @@ export function Calculator({
             className={styles["icon-button"]}
             onClick={() => {
               form.reset(initialInput);
-              setProductId(String(initialProduct.id));
+              setProductId(
+                compatibleCatalog ? String(initialProduct.id) : "custom",
+              );
               setDrink("cappuccino");
               setNotice(
                 "Начальные значения восстановлены. Сохранённый расчёт изменится после нажатия «Сохранить».",
@@ -314,94 +384,105 @@ export function Calculator({
                 </div>
                 <Leaf size={20} />
               </div>
-              <div className={styles["catalog-field"]}>
-                <label htmlFor={productSelectId}>
-                  Кофе из каталога Coffee Market
-                </label>
-                <div className={styles["select-wrap"]}>
-                  <select
-                    id={productSelectId}
-                    value={productId}
-                    onChange={(event) => {
-                      const id = event.target.value;
-                      setProductId(id);
-                      const p = catalog.products.find(
-                        (p) => String(p.id) === id,
-                      );
-                      if (p)
-                        form.setValue("coffeePrice", pricePerKilogram(p), {
-                          shouldValidate: true,
-                          shouldDirty: true,
-                        });
-                    }}
-                  >
-                    <option value="custom">Свой кофе / ручная цена</option>
-                    {catalog.products.map((p) => (
-                      <option key={p.id} value={p.id}>
-                        {p.name} · {formatMoney(p.price)} сом
-                        {p.stock === 0 ? " · нет в наличии" : ""}
-                      </option>
-                    ))}
-                  </select>
-                  <ChevronDown size={16} />
-                </div>
-                <div className={styles["catalog-meta"]}>
-                  <span className={styles["source-badge"]}>
-                    <span /> Цены каталога CoffeeMarket
-                  </span>
-                  <span>
-                    Получены{" "}
-                    {new Intl.DateTimeFormat("ru-RU", {
-                      dateStyle: "short",
-                      timeZone: "Asia/Bishkek",
-                    }).format(new Date(catalog.fetchedAt))}
-                  </span>
-                </div>
-                {selectedProduct && (
-                  <div className={styles["product-note"]}>
-                    {editedPrice
-                      ? "Цена за кг изменена вручную. "
-                      : `${selectedProduct.packageGrams} г · ${formatMoney(selectedProduct.price)} сом за упаковку. `}
-                    {selectedProduct.stock === 0 &&
-                      "Нет в наличии на дату получения. "}
-                    <a
-                      href={selectedProduct.url}
-                      target="_blank"
-                      rel="noreferrer"
+              {compatibleCatalog ? (
+                <div className={styles["catalog-field"]}>
+                  <label htmlFor={productSelectId}>
+                    Кофе из каталога Coffee Market
+                  </label>
+                  <div className={styles["select-wrap"]}>
+                    <select
+                      id={productSelectId}
+                      value={productId}
+                      onChange={(event) => {
+                        const id = event.target.value;
+                        setProductId(id);
+                        const p = catalog.products.find(
+                          (p) => String(p.id) === id,
+                        );
+                        if (p)
+                          form.setValue("coffeePrice", pricePerKilogram(p), {
+                            shouldValidate: true,
+                            shouldDirty: true,
+                          });
+                      }}
                     >
-                      Карточка товара ↗
-                    </a>
+                      <option value="custom">Свой кофе / ручная цена</option>
+                      {catalog.products.map((p) => (
+                        <option key={p.id} value={p.id}>
+                          {p.name} · {formatMoney(p.price)} {currency}
+                          {p.stock === 0 ? " · нет в наличии" : ""}
+                        </option>
+                      ))}
+                    </select>
+                    <ChevronDown size={16} />
                   </div>
-                )}
-              </div>
+                  <div className={styles["catalog-meta"]}>
+                    <span className={styles["source-badge"]}>
+                      <span /> Цены каталога CoffeeMarket
+                    </span>
+                    <span>
+                      Получены{" "}
+                      {new Intl.DateTimeFormat("ru-RU", {
+                        dateStyle: "short",
+                        timeZone: "Asia/Bishkek",
+                      }).format(new Date(catalog.fetchedAt))}
+                    </span>
+                  </div>
+                  {selectedProduct && (
+                    <div className={styles["product-note"]}>
+                      {editedPrice
+                        ? "Цена за кг изменена вручную. "
+                        : `${selectedProduct.packageGrams} г · ${formatMoney(selectedProduct.price)} ${currency} за упаковку. `}
+                      {selectedProduct.stock === 0 &&
+                        "Нет в наличии на дату получения. "}
+                      <a
+                        href={selectedProduct.url}
+                        target="_blank"
+                        rel="noreferrer"
+                      >
+                        Карточка товара ↗
+                      </a>
+                    </div>
+                  )}
+                </div>
+              ) : (
+                <div className={styles["manual-note"]}>
+                  <strong>Ваши цены — ваш расчёт</strong>
+                  <p>
+                    Для выбранного рынка и валюты каталог не подключён. Укажите
+                    цены поставщиков и расходы в {currency}. Начальные денежные
+                    значения равны нулю; это не оценка местных цен.
+                  </p>
+                </div>
+              )}
               <div className={styles["field-grid"]}>
                 <NumberField
                   name="coffeePrice"
                   label="Цена кофе"
-                  unit="сом / кг"
+                  unit={`${currency} / кг`}
                 />
                 <NumberField name="dose" label="Кофе на порцию" unit="г" />
                 <NumberField
                   name="milkPrice"
                   label="Цена молока"
-                  unit="сом / л"
+                  unit={`${currency} / л`}
                 />
                 <NumberField name="milk" label="Молоко на порцию" unit="мл" />
                 <NumberField
                   name="syrupPrice"
                   label="Цена сиропа"
-                  unit="сом / л"
+                  unit={`${currency} / л`}
                 />
                 <NumberField name="syrup" label="Сироп на порцию" unit="мл" />
                 <NumberField
                   name="packaging"
                   label="Стакан, крышка и прочее"
-                  unit="сом"
+                  unit={currency}
                 />
                 <NumberField
                   name="otherPerCup"
                   label="Прочие расходы на чашку"
-                  unit="сом"
+                  unit={currency}
                   hint="Вода, сахар, салфетка и т. п."
                 />
                 <NumberField
@@ -425,7 +506,7 @@ export function Calculator({
                 <NumberField
                   name="salePrice"
                   label="Цена продажи чашки"
-                  unit="сом"
+                  unit={currency}
                 />
                 <NumberField
                   name="cupsPerDay"
@@ -456,17 +537,17 @@ export function Calculator({
                 <span>ПОСТОЯННЫЕ РАСХОДЫ В МЕСЯЦ</span>
               </div>
               <div className={styles["field-grid"]}>
-                <NumberField name="rent" label="Аренда" unit="сом" />
-                <NumberField name="salaries" label="Зарплаты" unit="сом" />
+                <NumberField name="rent" label="Аренда" unit={currency} />
+                <NumberField name="salaries" label="Зарплаты" unit={currency} />
                 <NumberField
                   name="utilities"
                   label="Коммунальные расходы"
-                  unit="сом"
+                  unit={currency}
                 />
                 <NumberField
                   name="otherFixed"
                   label="Прочие постоянные"
-                  unit="сом"
+                  unit={currency}
                   hint="Аренда техники, сервис, реклама и т. п."
                 />
               </div>
@@ -479,7 +560,7 @@ export function Calculator({
         </FormProvider>
         {input && result ? (
           <div id={resultId} className={styles["results-anchor"]}>
-            <Results input={input} result={result} />
+            <Results input={input} result={result} currency={currency} />
           </div>
         ) : (
           <aside
@@ -492,6 +573,7 @@ export function Calculator({
           </aside>
         )}
       </div>
+      <PnlOffer input={input} context={context} anchorId={pnlAnchorId} />
       <section
         className={styles["methodology"] + " " + styles["panel"]}
         id={methodId}
@@ -543,16 +625,27 @@ export function Calculator({
             <div>
               <h3>Источники и ограничения</h3>
               <p>
-                Цены кофе — снимок публичного каталога CoffeeMarket от{" "}
-                {new Intl.DateTimeFormat("ru-RU", {
-                  dateStyle: "long",
-                  timeZone: "Asia/Bishkek",
-                }).format(new Date(catalog.fetchedAt))}
-                . Они не обновляются автоматически. Фасовки сверены по названиям
-                товаров. Остальные значения — редактируемые примеры. Расчёты
-                выполняются без промежуточного округления; суммы на экране
-                округлены до 0,01 сом, поэтому строки могут расходиться на 0,01
-                сом.
+                {compatibleCatalog ? (
+                  <>
+                    Цены кофе — снимок публичного каталога CoffeeMarket от{" "}
+                    {new Intl.DateTimeFormat("ru-RU", {
+                      dateStyle: "long",
+                      timeZone: "Asia/Bishkek",
+                    }).format(new Date(catalog.fetchedAt))}
+                    . Они не обновляются автоматически. Остальные значения —
+                    редактируемые примеры.
+                  </>
+                ) : (
+                  <>
+                    Цены и расходы задаёт пользователь. Источник региональных
+                    цен не подключён.
+                  </>
+                )}{" "}
+                Расчёты выполняются без промежуточного округления; итоги
+                округляются по точности {currency}. Смена рынка создаёт
+                отдельный сценарий и не конвертирует суммы. Налог моделируется
+                только как заданный процент выручки; налоговый режим страны
+                автоматически не определяется.
               </p>
             </div>
           </div>

@@ -1,82 +1,40 @@
-# Запуск и перенос
+# Развёртывание 2.0
 
-## Разработка
+## Sites
 
-Требуется Node.js 22.13+ (рекомендуется актуальный Node 24 LTS), npm и Git.
-Секреты и переменные окружения для калькулятора не нужны.
+Существующий project_id сохраняется в .openai/hosting.json. Manifest объявляет PNL_DB как D1 binding; R2 не используется. SQL и journal Drizzle находятся в drizzle. Sites применяет миграции при публикации. Предыдущие миграции неизменяемы.
 
-```sh
-npm ci
-npm test
-npm run typecheck
-npm run dev
-```
+Сборка: npm ci, npm test, npm run typecheck, npm run build. Исходники синхронизируются source helper Sites, который коммитит, отправляет точное состояние и пакует build. Публикуется archive из того же commit_sha. Существующая аудитория сохраняется.
 
-Dev-сервер Sites/Vinext слушает адрес, который напечатан в терминале
-(обычно http://127.0.0.1:5173). `package-lock.json` фиксирует зависимости.
+В production не заданы Telegram secrets: GET /api/pnl/config возвращает ready:false. POST /api/pnl/requests и webhook возвращают 503 без сбора контактов. Это намеренное состояние до подключения менеджера.
 
-## Текущий Sites-хостинг
-
-```sh
-npm run build
-```
-
-Создаётся `dist/server/index.js` с Worker-обработчиком и статическими ресурсами.
-Параметры размещения — `.openai/hosting.json`. Публикация производится штатным
-Sites workflow: проверенный commit, архив этой же сборки, сохранённая версия,
-приватное развёртывание. У сайта нет runtime-интеграции с коннекторами.
-
-## Независимый Node.js-хостинг
-
-Для переноса используется поддерживаемый обычным Node.js Next.js. Исходники
-`app` и `src` не меняются, Worker/Vinext в этом режиме не участвуют.
+## Обычный Node.js
 
 ```sh
 npm ci
-npm test
-npm run typecheck
 npm run build:portable
 npm run start:portable
 ```
 
-Next.js по умолчанию использует порт 3000; за reverse proxy можно передать PORT.
-В репозитории есть standalone-конфигурация и многостадийный Dockerfile:
+Next standalone содержит public и .next-node/static благодаря scripts/prepare-standalone.mjs. Dockerfile использует стандартный multistage Node image и непривилегированного пользователя. На любом хостинге доступны калькулятор и пример Excel. Production Telegram требует собственного постоянного адаптера DeliveryRepository и composition root: D1 bindings не появляются автоматически в Node. Контракты и SQL инварианты описаны в docs/TELEGRAM.md.
 
-```sh
-docker build -t coffeemarket-calculator .
-docker run --rm -p 3000:3000 coffeemarket-calculator
-```
+## Подключение менеджера позже
 
-Контейнер запускается непривилегированным пользователем. TLS и ограничения
-входящих запросов задаются в reverse proxy/хостинге. Пример Nginx для отдельного
-поддомена, например calculator.coffeemarket.kg:
+Не помещать секреты в .openai/hosting.json, Git, клиентские переменные NEXT_PUBLIC_* или URL. В Sites задать server-only environment через штатный инструмент; на другом хостинге — secret manager окружения. Имена:
 
-```nginx
-location / {
-    proxy_pass http://127.0.0.1:3000;
-    proxy_http_version 1.1;
-    proxy_set_header Host $host;
-    proxy_set_header X-Forwarded-Proto $scheme;
-    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-}
-```
+- TELEGRAM_BOT_TOKEN
+- TELEGRAM_WEBHOOK_SECRET
+- TELEGRAM_MANAGER_USERNAME либо TELEGRAM_MANAGER_PHONE
+- TELEGRAM_MANAGER_USER_ID
+- TELEGRAM_BUSINESS_CONNECTION_ID
+- PNL_PUBLIC_ORIGIN
 
-Docker и Nginx описаны как способ развёртывания, а не как изменение существующего
-coffeemarket.kg. Перед размещением в подпапке `/calculator` задайте `basePath` в
-Next-конфигурации, скорректируйте путь favicon и проверьте загрузку ресурсов.
-Сейчас самостоятельная страница размещается в корне отдельного origin.
-Для встраивания в существующий магазин подготовлена независимая JS/CSS-сборка
-и React-компонент с CSS Modules. Команды, пример HTML и правила подключения —
-в [INTEGRATION.md](./INTEGRATION.md). Глобальный CSS страницы предпросмотра
-не входит в виджет.
+Нужно подключить бизнес-бота к личному аккаунту менеджера с правом отвечать, установить webhook и настроить ежедневную очистку до реального сбора. Полный порядок и официальный API — docs/TELEGRAM.md. Интерфейс включит форму только после корректной конфигурации. Бот не отправляет обычные рекламные сообщения; выдача запускается только явным запросом пользователя.
 
-## Обновления
+## Локальная БД
 
-1. Обновить цены через адаптер данных, сохранив `fetchedAt` и размеры фасовок.
-2. Изменять формулы только в `src/domain`, дополняя независимые примеры тестов.
-3. Выполнить тесты, typecheck, обе требуемые сборки и smoke-проверку интерфейса.
-4. Разворачивать неизменяемую сборку; хранить предыдущую версию для отката.
+После изменения db/schema.ts выполнить npm run db:generate и проверить сгенерированные миграции. Для preview применять SQL к локальной D1 стандартным Wrangler migrations apply с binding PNL_DB и migrations_dir=drizzle; production и local — отдельные базы. SQL не создаётся при HTTP-запросе. В тестах тот же SQL выполняется настоящим SQLite, а не только моками.
 
-Приватность исходного Sites-прототипа не переносится автоматически на другой
-хостинг. При необходимости доступ ограничивается средствами выбранного хоста.
-Локальные сценарии пользователей переносятся экспортом/импортом JSON.
+## Зависимости
+
+package-lock.json обязателен. npm overrides обновляют uuid у ExcelJS до совместимого CommonJS-релиза 11.1.1+ (используется v4) и esbuild у @esbuild-kit/core-utils до исправленной 0.25.x. Эти ограничения — стандартные настройки npm, проверенные сборкой, генерацией миграций и тестами. Drizzle ORM обновлён до исправленной 0.45.4. Не использовать npm audit fix --force или замены API библиотек.

@@ -4,12 +4,24 @@ import { lazy, Suspense } from "react";
 import { ArrowDownRight, ArrowUpRight, Info, TrendingUp } from "lucide-react";
 import type { CalculatorInput, Calculation } from "../domain/calculator";
 import { compareDemand } from "../application/scenarios";
-import { formatInteger as integer, formatMoney as money } from "./format";
+import {
+  formatInteger as integer,
+  formatMoney as decimal,
+  createFormatters,
+} from "./format";
+import { currencyDigits, type Currency } from "../domain/markets";
 const ProfitChart = lazy(() =>
   import("./ProfitChart").then((module) => ({ default: module.ProfitChart })),
 );
 
-export function Summary({ result }: { result: Calculation | null }) {
+export function Summary({
+  result,
+  currency = "KGS",
+}: {
+  result: Calculation | null;
+  currency?: Currency;
+}) {
+  const { money } = createFormatters(currency);
   return (
     <section
       className={styles["summary-grid"]}
@@ -22,7 +34,7 @@ export function Summary({ result }: { result: Calculation | null }) {
           Себестоимость чашки <span className={styles["metric-icon"]}>◎</span>
         </div>
         <div className={styles["metric-value"]}>
-          {money(result?.productionCost ?? null)} <small>сом</small>
+          {money(result?.productionCost ?? null)} <small>{currency}</small>
         </div>
         <div className={styles["metric-note"]}>
           Ингредиенты, потери и упаковка
@@ -44,7 +56,7 @@ export function Summary({ result }: { result: Calculation | null }) {
           <TrendingUp size={17} />
         </div>
         <div className={styles["metric-value"]} data-testid="monthly-profit">
-          {money(result?.profit ?? null)} <small>сом</small>
+          {money(result?.profit ?? null)} <small>{currency}</small>
         </div>
         <div className={styles["metric-note"]}>
           После всех указанных расходов
@@ -70,10 +82,13 @@ export function Summary({ result }: { result: Calculation | null }) {
 export function Results({
   input,
   result,
+  currency = "KGS",
 }: {
   input: CalculatorInput;
   result: Calculation;
+  currency?: Currency;
 }) {
+  const { money } = createFormatters(currency);
   const parts = [
     { label: "Кофе", value: result.parts.coffee, color: "#5c3a29" },
     { label: "Молоко", value: result.parts.milk, color: "#ba884d" },
@@ -90,7 +105,7 @@ export function Results({
           <span className={styles["mini-tag"]}>1 порция</span>
         </div>
         <div className={styles["cost-total"]}>
-          {money(result.productionCost)} <small>сом</small>
+          {money(result.productionCost)} <small>{currency}</small>
         </div>
         <div className={styles["cost-bar"]} aria-hidden="true">
           {parts.map((p) => (
@@ -108,28 +123,30 @@ export function Results({
                 {p.label}
               </dt>
               <dd>
-                {money(p.value)} <span>сом</span>
+                {money(p.value)} <span>{currency}</span>
               </dd>
             </div>
           ))}
         </dl>
         <div className={styles["contribution-box"]}>
           <span>Маржинальная прибыль с чашки</span>
-          <strong>{money(result.contribution)} сом</strong>
+          <strong>
+            {money(result.contribution)} {currency}
+          </strong>
           <small>Цена − себестоимость − комиссии − налог с выручки</small>
         </div>
         <div className={styles["ratio-row"]}>
           <div>
             <span>Маржинальность</span>
             <strong>
-              {money(result.contributionMargin)}
+              {decimal(result.contributionMargin)}
               {result.contributionMargin !== null && "%"}
             </strong>
           </div>
           <div>
             <span>Наценка на себестоимость</span>
             <strong>
-              {money(result.markup)}
+              {decimal(result.markup)}
               {result.markup !== null && "%"}
             </strong>
           </div>
@@ -149,18 +166,24 @@ export function Results({
           </div>
           <div>
             <dt>Выручка</dt>
-            <dd>{money(result.revenue)} сом</dd>
+            <dd>
+              {money(result.revenue)} {currency}
+            </dd>
           </div>
           <div>
             <dt>
               Переменные расходы{" "}
               <Info size={13} aria-label="Включая комиссии и налог с выручки" />
             </dt>
-            <dd>−{money(result.variableTotal)} сом</dd>
+            <dd>
+              −{money(result.variableTotal)} {currency}
+            </dd>
           </div>
           <div>
             <dt>Постоянные расходы</dt>
-            <dd>−{money(result.fixedCosts)} сом</dd>
+            <dd>
+              −{money(result.fixedCosts)} {currency}
+            </dd>
           </div>
           <div
             className={[
@@ -175,14 +198,18 @@ export function Results({
                 ? "Потенциальный убыток"
                 : "Потенциальная прибыль"}
             </dt>
-            <dd>{money(result.profit)} сом</dd>
+            <dd>
+              {money(result.profit)} {currency}
+            </dd>
           </div>
         </dl>
         <div className={styles["inline-note"]}>
           <Info size={16} />
           <span>
             Полная себестоимость с долей постоянных расходов:{" "}
-            <strong>{money(result.fullCostPerCup)} сом / чашка</strong>
+            <strong>
+              {money(result.fullCostPerCup)} {currency} / чашка
+            </strong>
             {result.fullCostPerCup === null && " (нет продаж)"}
           </span>
         </div>
@@ -197,7 +224,7 @@ export function Results({
             <div className={styles["chart-loading"]}>Загрузка графика…</div>
           }
         >
-          <ProfitChart input={input} />
+          <ProfitChart input={input} currency={currency} />
         </Suspense>
         <table className={styles["scenario-table"]}>
           <caption>Три сценария спроса</caption>
@@ -209,7 +236,7 @@ export function Results({
             </tr>
           </thead>
           <tbody>
-            {compareDemand(input).map((s) => (
+            {compareDemand(input, currencyDigits(currency)).map((s) => (
               <tr
                 key={s.factor}
                 className={s.factor === 1 ? styles["base-scenario"] : undefined}
@@ -228,7 +255,9 @@ export function Results({
                   )}
                 </th>
                 <td>{integer(s.cupsPerDay)}</td>
-                <td>{money(s.result.profit)} сом</td>
+                <td>
+                  {money(s.result.profit)} {currency}
+                </td>
               </tr>
             ))}
           </tbody>

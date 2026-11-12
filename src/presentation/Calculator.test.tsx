@@ -142,4 +142,79 @@ describe("calculator interactions", () => {
       expect(screen.getByLabelText("Чашек в день")).toHaveValue(73),
     );
   });
+
+  it("keeps market scenarios separate without relabeling their prices", async () => {
+    renderCalculator();
+    fireEvent.change(screen.getByLabelText("Цена продажи чашки"), {
+      target: { value: "250" },
+    });
+    fireEvent.change(screen.getByLabelText("Рынок", { exact: true }), {
+      target: { value: "KZ" },
+    });
+    expect(screen.getByLabelText("Цена продажи чашки")).toHaveValue(250);
+    fireEvent.click(screen.getByRole("button", { name: /^Перейти$/ }));
+    await waitFor(() =>
+      expect(screen.getByLabelText("Цена продажи чашки")).toHaveValue(0),
+    );
+    expect(
+      screen.queryByLabelText("Кофе из каталога Coffee Market"),
+    ).toBeNull();
+    fireEvent.change(screen.getByLabelText("Цена продажи чашки"), {
+      target: { value: "1200" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: /Американо/ }));
+    expect(screen.getByLabelText("Цена продажи чашки")).toHaveValue(1200);
+    fireEvent.change(screen.getByLabelText("Рынок", { exact: true }), {
+      target: { value: "KG" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: /^Перейти$/ }));
+    await waitFor(() =>
+      expect(screen.getByLabelText("Цена продажи чашки")).toHaveValue(250),
+    );
+    expect(
+      screen.getByLabelText("Кофе из каталога Coffee Market"),
+    ).toBeInTheDocument();
+  });
+
+  it("can cancel currency switching and retains invalid edits", async () => {
+    renderCalculator();
+    fireEvent.change(screen.getByLabelText("Валюта расчёта"), {
+      target: { value: "USD" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Отмена" }));
+    expect(screen.getByLabelText("Валюта расчёта")).toHaveValue("KGS");
+    fireEvent.change(screen.getByLabelText("Рабочих дней в месяц"), {
+      target: { value: "32" },
+    });
+    fireEvent.change(screen.getByLabelText("Валюта расчёта"), {
+      target: { value: "USD" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: /^Перейти$/ }));
+    await waitFor(() =>
+      expect(
+        screen.getByText(/Исправьте ошибки, чтобы сохранить/),
+      ).toBeInTheDocument(),
+    );
+    expect(screen.getByLabelText("Валюта расчёта")).toHaveValue("KGS");
+    expect(screen.getByLabelText("Рабочих дней в месяц")).toHaveValue(32);
+  });
+
+  it("migrates legacy imports explicitly to the original currency", async () => {
+    renderCalculator();
+    const legacy = {
+      version: 1,
+      savedAt: new Date().toISOString(),
+      input: { ...defaultInput, salePrice: 301 },
+    };
+    const file = new NodeFile([JSON.stringify(legacy)], "legacy.json", {
+      type: "application/json",
+    });
+    fireEvent.change(screen.getByLabelText("Файл расчёта JSON"), {
+      target: { files: [file] },
+    });
+    await waitFor(() =>
+      expect(screen.getByLabelText("Цена продажи чашки")).toHaveValue(301),
+    );
+    expect(screen.getByLabelText("Валюта расчёта")).toHaveValue("KGS");
+  });
 });

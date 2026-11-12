@@ -17,38 +17,37 @@ export function StorefrontPreview({ catalog }: { catalog: Catalog }) {
       <header className={styles.header}>
         <div className={styles.headerInner}>
           <a className={styles.brand} href="https://coffeemarket.kg/">
-            COFFEEMARKET.KG<span>КОФЕ · ОБОРУДОВАНИЕ · ПОДДЕРЖКА</span>
+            COFFEE MARKET<span>ЭКОНОМИКА ВАШЕГО КОФЕЙНОГО БИЗНЕСА</span>
           </a>
-          <nav aria-label="Магазин Coffee Market">
-            <a href="https://coffeemarket.kg/catalog/?category=coffee">Кофе</a>
-            <a href="https://coffeemarket.kg/rent/">Аренда</a>
-            <a href="https://coffeemarket.kg/support/">
-              Поддержка <ExternalLink size={12} />
+          <nav aria-label="Навигация калькулятора">
+            <a href="#calculator">Калькулятор</a>
+            <a href="#pnl">P&amp;L на 3 месяца</a>
+            <a href="https://coffeemarket.kg/">
+              Coffee Market <ExternalLink size={12} />
             </a>
           </nav>
         </div>
       </header>
       <main className={styles.main}>
-        <nav className={styles.breadcrumbs} aria-label="Хлебные крошки">
-          <a href="https://coffeemarket.kg/">Главная</a>
-          <span>/</span>
-          <span aria-current="page">Калькулятор кофе</span>
-        </nav>
-        <Calculator catalog={catalog} />
+        <div id="calculator">
+          <Calculator catalog={catalog} pnlAnchorId="pnl" />
+        </div>
         <section className={styles.nextStep}>
           <div className={styles.nextIcon}>
             <Coffee size={25} />
           </div>
           <div>
             <h2>От хорошего расчёта — к хорошему кофе</h2>
-            <p>Подберите кофе и оборудование под задачи вашего бизнеса.</p>
+            <p>
+              Кофе и оборудование Coffee Market — для бизнеса в Кыргызстане.
+            </p>
           </div>
           <a href="https://coffeemarket.kg/catalog/?category=coffee">
             Выбрать кофе <ArrowRight size={16} />
           </a>
         </section>
         <footer className={styles.footer}>
-          <span>© CoffeeMarket.kg</span>
+          <span>© Coffee Market · Бесплатный калькулятор</span>
           <a href="https://coffeemarket.kg/contact/">
             Помощь с выбором оборудования <ArrowRight size={13} />
           </a>

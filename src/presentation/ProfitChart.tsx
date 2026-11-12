@@ -11,14 +11,28 @@ import {
   YAxis,
 } from "recharts";
 import { calculate, type CalculatorInput } from "../domain/calculator";
-import { formatMoney } from "./format";
+import { createFormatters } from "./format";
+import { currencyDigits, type Currency } from "../domain/markets";
 
 /** Displays sales sensitivity through the same calculation use case. */
-export function ProfitChart({ input }: { input: CalculatorInput }) {
+export function ProfitChart({
+  input,
+  currency = "KGS",
+}: {
+  input: CalculatorInput;
+  currency?: Currency;
+}) {
+  const { money: formatMoney } = createFormatters(currency);
   const max = Math.min(10000, Math.max(100, input.cupsPerDay * 2));
   const data = Array.from({ length: 11 }, (_, index) => {
     const cups = Math.round((max * index) / 10);
-    return { cups, profit: calculate({ ...input, cupsPerDay: cups }).profit };
+    return {
+      cups,
+      profit: calculate(
+        { ...input, cupsPerDay: cups },
+        currencyDigits(currency),
+      ).profit,
+    };
   });
   return (
     <div
@@ -51,7 +65,7 @@ export function ProfitChart({ input }: { input: CalculatorInput }) {
           />
           <Tooltip
             formatter={(v) => [
-              `${formatMoney(Number(v))} сом`,
+              `${formatMoney(Number(v))} ${currency}`,
               "Прибыль / мес.",
             ]}
             labelFormatter={(v) => `${v} чашек / день`}

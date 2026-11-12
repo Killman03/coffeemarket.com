@@ -1,5 +1,6 @@
 import { z } from "zod";
 import Decimal from "decimal.js";
+import { currencySchema, marketSchema } from "./markets";
 
 export const coffeeProductSchema = z.object({
   id: z.number().int().positive(),
@@ -12,9 +13,10 @@ export const coffeeProductSchema = z.object({
 });
 
 export const catalogSchema = z.object({
-  source: z.literal("CoffeeMarket MCP / get_business_context"),
+  source: z.string().min(1),
   fetchedAt: z.string().datetime({ offset: true }),
-  currency: z.literal("KGS"),
+  currency: currencySchema,
+  market: marketSchema.default("KG"),
   products: z.array(coffeeProductSchema).min(1),
 });
 
@@ -26,7 +28,7 @@ export type Catalog = z.infer<typeof catalogSchema>;
  *   product: Validated catalog entry with an explicit package weight.
  *
  * Returns:
- *   KGS per kilogram, without premature rounding.
+ *   Catalog currency per kilogram, without premature rounding.
  */
 export function pricePerKilogram(
   product: z.infer<typeof coffeeProductSchema>,

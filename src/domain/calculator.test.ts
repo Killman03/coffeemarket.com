@@ -149,4 +149,35 @@ describe("unit economics", () => {
     );
     expect(defaultInput).toEqual(before);
   });
+
+  it("rounds currency results without rounding per-cup costs before monthly totals", () => {
+    const input = {
+      ...defaultInput,
+      coffeePrice: 100,
+      dose: 18,
+      milk: 0,
+      syrup: 0,
+      lossPercent: 0,
+      packaging: 0,
+      otherPerCup: 0,
+      feePercent: 0,
+      turnoverTaxPercent: 0,
+      salePrice: 10,
+      cupsPerDay: 3,
+      daysPerMonth: 1,
+      rent: 0,
+      salaries: 0,
+      utilities: 0,
+      otherFixed: 0,
+    };
+    const yen = calculate(input, 0);
+    expect(yen.productionCost).toBe(2);
+    expect(yen.variableTotal).toBe(5);
+    expect(yen.profit).toBe(25);
+    const dinar = calculate({ ...input, coffeePrice: 1.234, dose: 1 }, 3);
+    expect(dinar.productionCost).toBe(0.001);
+    expect(dinar.variableTotal).toBe(0.004);
+    expect(dinar.profit).toBe(29.996);
+    expect(() => calculate(input, 4)).toThrow();
+  });
 });
