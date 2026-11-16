@@ -18,13 +18,11 @@ function setup(owner: string | null = "owner-subject") {
     get: vi.fn().mockResolvedValue(initial),
     getOwner: vi.fn().mockResolvedValue(owner ? { subject: owner } : null),
     claimOwner: vi.fn().mockResolvedValue(true),
-    save: vi
-      .fn()
-      .mockImplementation(async (settings) => ({
-        settings,
-        revision: 1,
-        updatedAt: 100,
-      })),
+    save: vi.fn().mockImplementation(async (settings) => ({
+      settings,
+      revision: 1,
+      updatedAt: 100,
+    })),
   };
   const deps: AdminDependencies = {
     repository,

@@ -38,8 +38,8 @@ export class D1DeliveryRepository implements DeliveryRepository {
   async create(record: DeliveryRecord, rateKey: string, now: number) {
     const result = await this.db
       .prepare(
-        `INSERT INTO pnl_requests (id,payload,expires_at,created_at,rate_key,state,phone,consent_text,consent_version,consented_at)
-      SELECT ?,?,?,?,?, 'pending',?,?,?,? WHERE
+        `INSERT INTO pnl_requests (id,payload,expires_at,created_at,rate_key,state,phone,consent_text,consent_version,consented_at,analytics_session_id)
+      SELECT ?,?,?,?,?, 'pending',?,?,?,?,(SELECT id FROM analytics_sessions WHERE id=?) WHERE
       (SELECT COUNT(*) FROM pnl_requests WHERE rate_key=? AND created_at>?)<5 AND
       (SELECT COUNT(*) FROM pnl_requests WHERE created_at>?)<100`,
       )
@@ -53,6 +53,7 @@ export class D1DeliveryRepository implements DeliveryRepository {
         CONSENT_TEXT,
         CONSENT_VERSION,
         now,
+        record.analyticsSessionId ?? null,
         rateKey,
         now - 600_000,
         now - 60_000,

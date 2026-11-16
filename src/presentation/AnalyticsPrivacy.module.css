@@ -1,0 +1,56 @@
+.notice {
+  max-width: 1140px;
+  margin: 0 auto;
+  padding: 12px 28px 26px;
+  display: flex;
+  gap: 24px;
+  justify-content: space-between;
+  align-items: flex-start;
+  color: #75695e;
+  font:
+    12px/1.7 Roboto,
+    Arial,
+    sans-serif;
+}
+.notice details {
+  max-width: 740px;
+}
+.notice summary {
+  cursor: pointer;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+.notice p {
+  margin: 12px 0 0;
+}
+.notice > div {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+.notice button {
+  background: none;
+  border: 0;
+  padding: 0;
+  color: #6f4828;
+  font: inherit;
+  cursor: pointer;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+.notice button:focus-visible,
+.notice summary:focus-visible {
+  outline: 2px solid #ac7b49;
+  outline-offset: 4px;
+}
+@media (max-width: 600px) {
+  .notice {
+    padding: 16px 20px 28px;
+    flex-direction: column;
+    gap: 14px;
+  }
+  .notice > div {
+    justify-content: flex-start;
+  }
+}

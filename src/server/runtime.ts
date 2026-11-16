@@ -7,6 +7,7 @@ import { createPnlWorkbook } from "../infrastructure/pnl-workbook";
 import { D1SettingsRepository } from "./settings-repository";
 import { createDefaultSettings } from "../application/site-settings";
 import type { SiteSettings } from "../domain/site-settings";
+import { D1AnalyticsRepository } from "./analytics-repository";
 
 export type DeliveryEnvironment = {
   PNL_DB?: D1Database;
@@ -47,6 +48,12 @@ export function getRuntimeEnvironment(): DeliveryEnvironment | undefined {
 export function getSettingsRepository(): D1SettingsRepository | null {
   const db = environments.getStore()?.PNL_DB;
   return db ? new D1SettingsRepository(db) : null;
+}
+
+/** Opens the analytics adapter within the current request's storage scope. */
+export function getAnalyticsRepository(): D1AnalyticsRepository | null {
+  const db = environments.getStore()?.PNL_DB;
+  return db ? new D1AnalyticsRepository(db) : null;
 }
 
 /** Loads current settings; standalone calculator builds retain explicit defaults. */

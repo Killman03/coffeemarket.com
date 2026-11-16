@@ -1,6 +1,6 @@
 // @vitest-environment node
-import { readFileSync, readdirSync } from "node:fs";
-import { DatabaseSync } from "node:sqlite";
+import { createSQLiteD1 } from "../test-support/d1";
+import type { DatabaseSync } from "node:sqlite";
 import { afterEach, describe, expect, it } from "vitest";
 import { createDefaultSettings } from "../application/site-settings";
 import { type SiteSettings } from "../domain/site-settings";
@@ -17,55 +17,11 @@ afterEach(() => {
  *   Repository and database for asserting persisted rows and rollback behavior.
  */
 function setup() {
-  const sql = new DatabaseSync(":memory:");
+  const { db, sql } = createSQLiteD1();
   databases.push(sql);
-  const folder = new URL("../../drizzle/", import.meta.url);
-  for (const file of readdirSync(folder)
-    .filter((value) => value.endsWith(".sql"))
-    .sort())
-    sql.exec(readFileSync(new URL(file, folder), "utf8"));
-  class Statement {
-    values: (string | number | null)[] = [];
-    constructor(readonly query: string) {}
-    bind(...values: (string | number | null)[]) {
-      this.values = values;
-      return this;
-    }
-    async first() {
-      return sql.prepare(this.query).get(...this.values) ?? null;
-    }
-    execute() {
-      const prepared = sql.prepare(this.query);
-      if (prepared.columns().length)
-        return {
-          results: prepared.all(...this.values),
-          success: true,
-          meta: { changes: 0 },
-        };
-      const result = prepared.run(...this.values);
-      return {
-        results: [],
-        success: true,
-        meta: { changes: Number(result.changes) },
-      };
-    }
-  }
-  const db = {
-    prepare: (query: string) => new Statement(query),
-    async batch(statements: Statement[]) {
-      sql.exec("BEGIN IMMEDIATE");
-      try {
-        const result = statements.map((statement) => statement.execute());
-        sql.exec("COMMIT");
-        return result;
-      } catch (error) {
-        sql.exec("ROLLBACK");
-        throw error;
-      }
-    },
-  } as unknown as D1Database;
   return { repository: new D1SettingsRepository(db), sql };
 }
+
 const now = 1_800_000_000_000;
 const count = (
   sql: DatabaseSync,

@@ -83,12 +83,13 @@ export async function createDeliveryRequest(
       `${deps.webhookSecret}:${request.headers.get("cf-connecting-ip") ?? "anonymous"}`,
     );
     const expiresAt = now + 15 * 60_000;
-    const { input, context, phone } = parsed.data;
+    const { input, context, phone, analyticsSessionId } = parsed.data;
     const created = await deps.repository.create(
       {
         id: await digest(ticket),
         payload: { input, context },
         phone,
+        ...(analyticsSessionId ? { analyticsSessionId } : {}),
         expiresAt,
         chatId: null,
         userId: null,

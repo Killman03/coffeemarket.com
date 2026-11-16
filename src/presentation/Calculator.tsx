@@ -44,6 +44,7 @@ import {
 import { MarketSettings } from "./MarketSettings";
 import { PnlOffer } from "./PnlOffer";
 import styles from "./Calculator.module.css";
+import { useAnalytics } from "./AnalyticsProvider";
 
 /** Composes presentation, validation and use cases without business formulas. */
 export type CalculatorProps = {
@@ -72,6 +73,8 @@ export function Calculator({
   settings,
 }: CalculatorProps) {
   const [context, setContext] = useState<MarketContext>(initialContext);
+  const analytics = useAnalytics();
+  const [interacted, setInteracted] = useState(false);
   const currency = context.currency;
   const { money: formatMoney } = useMemo(
     () => createFormatters(currency),
@@ -105,6 +108,7 @@ export function Calculator({
   const validated = calculatorSchema.safeParse(watched);
   const input = validated.success ? validated.data : null;
   const result = input ? calculate(input, currencyDigits(currency)) : null;
+  const analyticsInputKey = input ? JSON.stringify(input) : "";
   const [drink, setDrink] = useState<keyof typeof presets | "custom">(
     "cappuccino",
   );
@@ -140,6 +144,29 @@ export function Calculator({
     }
   }, [form, catalog, initialContext, settings]);
 
+  useEffect(() => {
+    if (analytics.ready && restored.current)
+      analytics.track("page_view", context);
+  }, [analytics.ready, analytics.track, context]);
+  useEffect(() => {
+    if (!analyticsInputKey || !interacted || !analytics.ready) return;
+    const timer = setTimeout(
+      () => analytics.track("calculation_completed", context),
+      750,
+    );
+    return () => clearTimeout(timer);
+  }, [
+    analyticsInputKey,
+    interacted,
+    context,
+    analytics.ready,
+    analytics.track,
+  ]);
+  function beginInteraction(next = context) {
+    setInteracted(true);
+    analytics.track("calculation_started", next);
+  }
+
   /** Switches isolated market scenarios without relabeling monetary amounts.
    *
    * Args:
@@ -166,6 +193,8 @@ export function Calculator({
       /* Session drafts remain available when browser storage is disabled. */
     }
     form.reset(target ?? initialCalculatorInput(next, catalog, settings));
+    beginInteraction(next);
+    analytics.track("market_changed", next);
     setContext(next);
     setDrink("custom");
     setProductId("custom");
@@ -175,6 +204,7 @@ export function Calculator({
   }
 
   function selectDrink(key: keyof typeof presets) {
+    beginInteraction();
     setDrink(key);
     const preset = presets[key];
     (compatibleCatalog && !settings
@@ -203,6 +233,7 @@ export function Calculator({
       const store = new BrowserScenarioStore(window.localStorage);
       store.save(input, context);
       store.saveLastContext(context);
+      analytics.track("scenario_saved", context);
       setNotice("Расчёт сохранён в браузере на этом устройстве.");
     } catch {
       setNotice("Браузер не разрешил сохранение. Используйте экспорт JSON.");
@@ -234,6 +265,7 @@ export function Calculator({
     link.href = url;
     link.download = "coffee-market-calculation.json";
     link.click();
+    analytics.track("scenario_exported", context);
     setTimeout(() => URL.revokeObjectURL(url), 1000);
     setNotice("Расчёт экспортирован в JSON. Его можно импортировать обратно.");
   }
@@ -243,6 +275,7 @@ export function Calculator({
     try {
       if (file.size > 100000) throw new Error("File too large");
       const scenario = scenarioSchema.parse(JSON.parse(await file.text()));
+      beginInteraction(scenario.context);
       if (input) drafts.current.set(`${context.market}:${currency}`, input);
       setContext(scenario.context);
       form.reset(scenario.input);
@@ -260,7 +293,18 @@ export function Calculator({
   }
 
   return (
-    <section className={styles["root"]} aria-label="Калькулятор Coffee Market">
+    <section
+      className={styles["root"]}
+      aria-label="Калькулятор Coffee Market"
+      onChangeCapture={(event) => {
+        const target = event.target;
+        if (
+          target instanceof HTMLInputElement &&
+          Object.hasOwn(initialInput, target.name)
+        )
+          beginInteraction();
+      }}
+    >
       <a href={"#" + formId} className={styles["skip-link"]}>
         Перейти к расчёту
       </a>
@@ -411,6 +455,7 @@ export function Calculator({
                       id={productSelectId}
                       value={productId}
                       onChange={(event) => {
+                        beginInteraction();
                         const id = event.target.value;
                         setProductId(id);
                         const p = catalog.products.find(

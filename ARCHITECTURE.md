@@ -1,4 +1,4 @@
-# Архитектура Coffee Market 2.1
+# Архитектура Coffee Market 2.2
 
 ## Продукт и границы
 
@@ -72,3 +72,9 @@ src/server/settings-repository.ts реализует SettingsRepository чере
 src/server/admin.ts содержит проверку владельца, CSRF и сценарии HTTP, независимые от Next/Sites. app/admin/dependencies.ts — единственная связка с официальным Sites auth helper app/chatgpt-auth.ts. Проверка доступа повторяется в API, а не только в UI. Публичная страница динамическая, получает только content/defaults; конфигурация доставки читается заново из БД. HTTP ответы API no-store, тела ограничены, валидация клиент/сервер одна. Админка не принимает HTML и не раскрывает токены.
 
 Identity gateway Sites обязан удалять клиентские oai-authenticated-user-* и подставлять проверенные заголовки. Эти заголовки нельзя считать доверенными при прямом запуске произвольного Node-сервера. Переносимый калькулятор доступен без БД; админка на таком сервере закрыта до подключения identity/storage адаптеров. В Django используйте существующие authentication, staff permissions, CSRF middleware и ModelAdmin для эквивалентных настроек; интерфейс можно перенести, но копировать доверие к внешним заголовкам нельзя. Детали — docs/ADMIN.md.
+
+## Собственная аналитика 2.2
+
+Контракты и UTC-периоды отделены в src/domain/analytics.ts; порт AnalyticsRepository имеет ingest/report/cleanup, D1-адаптер — src/server/analytics-repository.ts. BrowserAnalytics принимает только имя события и MarketContext, не финансовые значения. Provider доступен только публичной странице; widget без provider не отслеживается. Owner exclusion проверяется на сервере страницы и коллектора.
+
+Миграция 0002 добавляет sessions/events и nullable связь с delivery-заявкой. Уникальный eventId и D1 batch дают атомарную дедупликацию; повторы не продлевают активность. Отчёт — SQL-агрегаты, UTC-когорта с неизменяемой атрибуцией и последовательной воронкой. Подтверждённые показатели читают реальные состояния pnl_requests. UI не может отправить событие delivered. Полная семантика, ограничения, очистка и перенос — docs/ANALYTICS.md.

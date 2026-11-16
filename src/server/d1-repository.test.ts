@@ -1,6 +1,6 @@
 // @vitest-environment node
-import { readFileSync, readdirSync } from "node:fs";
-import { DatabaseSync } from "node:sqlite";
+import { createSQLiteD1 } from "../test-support/d1";
+
 import { describe, expect, it } from "vitest";
 import { D1DeliveryRepository } from "./d1-repository";
 import {
@@ -12,35 +12,10 @@ import { defaultInput } from "../application/scenarios";
 
 /** Runs real generated SQL against SQLite; the shim only adapts D1's API. */
 function setup() {
-  const sql = new DatabaseSync(":memory:");
-  const folder = new URL("../../drizzle/", import.meta.url);
-  for (const file of readdirSync(folder)
-    .filter((file) => file.endsWith(".sql"))
-    .sort())
-    sql.exec(readFileSync(new URL(file, folder), "utf8"));
-  class Statement {
-    values: (string | number | null)[] = [];
-    constructor(readonly query: string) {}
-    bind(...values: (string | number | null)[]) {
-      this.values = values;
-      return this;
-    }
-    async run() {
-      const result = sql.prepare(this.query).run(...this.values);
-      return { meta: { changes: Number(result.changes) } };
-    }
-    async first() {
-      return sql.prepare(this.query).get(...this.values) ?? null;
-    }
-  }
-  const db = {
-    prepare: (query: string) => new Statement(query),
-    async batch(statements: Statement[]) {
-      return Promise.all(statements.map((statement) => statement.run()));
-    },
-  } as unknown as D1Database;
+  const { db, sql } = createSQLiteD1();
   return { repository: new D1DeliveryRepository(db), sql };
 }
+
 const now = 1_800_000_000_000;
 const record = (id = "hash"): DeliveryRecord => ({
   id,

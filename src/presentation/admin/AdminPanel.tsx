@@ -13,10 +13,8 @@ import {
   ArrowUpRight,
   Check,
   CircleAlert,
-  Coffee,
   FileText,
   LoaderCircle,
-  LogOut,
   Save,
   Send,
   Settings2,
@@ -33,6 +31,7 @@ import {
 } from "../../domain/site-settings";
 import type { z } from "zod";
 import styles from "./AdminPanel.module.css";
+import { AdminHeader } from "./AdminHeader";
 
 type Section = "telegram" | "defaults" | "content";
 type AdminPanelProps = {
@@ -350,25 +349,7 @@ export function AdminPanel({
   return (
     <main className={styles.root}>
       <div className={styles.shell}>
-        <header className={styles.topbar}>
-          <a className={styles.brand} href="/">
-            <Coffee size={23} aria-hidden="true" />
-            <span>
-              COFFEE MARKET<small>Панель управления</small>
-            </span>
-          </a>
-          <div className={styles.account}>
-            <span>{userDisplayName}</span>
-            <a
-              href="/signout-with-chatgpt?return_to=%2Fadmin"
-              target="_top"
-              aria-label="Выйти из аккаунта"
-            >
-              <LogOut size={17} aria-hidden="true" />
-              <span>Выйти</span>
-            </a>
-          </div>
-        </header>
+        <AdminHeader userDisplayName={userDisplayName} active="settings" />
         <div className={styles.heading}>
           <div>
             <a className={styles.back} href="/">

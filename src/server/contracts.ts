@@ -10,6 +10,7 @@ export const requestSchema = z
     context: contextSchema,
     phone: phoneSchema,
     consent: z.literal(true),
+    analyticsSessionId: z.uuid().optional(),
   })
   .strict();
 export type PnlRequest = Pick<
@@ -25,6 +26,7 @@ export type DeliveryRecord = {
   userId: number | null;
   state: DeliveryState;
   phone: string;
+  analyticsSessionId?: string;
 };
 
 /** Defines persistent, atomic operations independently of the hosting provider. */

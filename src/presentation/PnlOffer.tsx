@@ -10,6 +10,7 @@ import type { CalculatorInput } from "../domain/calculator";
 import type { MarketContext } from "../domain/markets";
 import type { PublicSettings } from "../domain/site-settings";
 import styles from "./Calculator.module.css";
+import { useAnalytics } from "./AnalyticsProvider";
 
 const contactSchema = z.object({
   phone: phoneSchema,
@@ -50,6 +51,7 @@ export function PnlOffer({
   settings?: PublicSettings;
 }) {
   const id = useId();
+  const analytics = useAnalytics();
   const [ready, setReady] = useState(false);
   const [loaded, setLoaded] = useState(false);
   const [open, setOpen] = useState(false);
@@ -89,7 +91,12 @@ export function PnlOffer({
       const response = await fetch("/api/pnl/requests", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ input, context, ...values }),
+        body: JSON.stringify({
+          input,
+          context,
+          ...values,
+          analyticsSessionId: analytics.sessionId(),
+        }),
         signal: AbortSignal.timeout(15000),
       });
       if (!response.ok)
@@ -150,7 +157,10 @@ export function PnlOffer({
           <button
             className={styles["primary-button"]}
             disabled={!ready || !input}
-            onClick={() => setOpen(!open)}
+            onClick={() => {
+              if (!open) analytics.track("pnl_opened", context);
+              setOpen(!open);
+            }}
             aria-expanded={open}
             aria-controls={id + "-contact"}
           >
@@ -160,6 +170,7 @@ export function PnlOffer({
           <a
             href="/templates/coffee-market-pnl-3-months.xlsx"
             download
+            onClick={() => analytics.track("sample_clicked", context)}
             className={styles["pnl-sample"]}
           >
             Посмотреть пример Excel <ArrowUpRight size={15} />
@@ -270,6 +281,7 @@ export function PnlOffer({
                 href={telegramUrl}
                 target="_blank"
                 rel="noreferrer"
+                onClick={() => analytics.track("telegram_clicked", context)}
               >
                 Открыть чат менеджера <ArrowUpRight size={16} />
               </a>
