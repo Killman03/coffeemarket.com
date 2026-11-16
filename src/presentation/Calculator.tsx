@@ -26,10 +26,11 @@ import {
 import { pricePerKilogram, type Catalog } from "../domain/catalog";
 import {
   createScenario,
-  createInitialInput,
   presets,
   scenarioSchema,
 } from "../application/scenarios";
+import { initialCalculatorInput } from "../application/public-calculator-settings";
+import type { PublicSettings } from "../domain/site-settings";
 import { BrowserScenarioStore } from "../infrastructure/scenario-storage";
 import { NumberField } from "./NumberField";
 import { Results, Summary } from "./Results";
@@ -51,14 +52,24 @@ export type CalculatorProps = {
   headingLevel?: 1 | 2;
   initialContext?: MarketContext;
   pnlAnchorId?: string;
+  settings?: PublicSettings;
 };
 
+/** Composes the calculator with public defaults while preserving visitor inputs.
+ *
+ * Args:
+ *   props: Catalog, optional validated settings and embedding presentation.
+ *
+ * Returns:
+ *   A calculator whose saved scenarios take precedence over initial defaults.
+ */
 export function Calculator({
   catalog,
   showIntro = true,
   headingLevel = 1,
   initialContext = defaultContext,
   pnlAnchorId,
+  settings,
 }: CalculatorProps) {
   const [context, setContext] = useState<MarketContext>(initialContext);
   const currency = context.currency;
@@ -78,7 +89,13 @@ export function Calculator({
   const initialProduct =
     catalog.products.find((product) => product.stock > 0) ??
     catalog.products[0];
-  const initialInput = createInitialInput(context, catalog);
+  const initialInput = initialCalculatorInput(context, catalog, settings);
+  const initialProductId =
+    !settings &&
+    compatibleCatalog &&
+    initialInput.coffeePrice === pricePerKilogram(initialProduct)
+      ? String(initialProduct.id)
+      : "custom";
   const form = useForm<CalculatorInput>({
     defaultValues: initialInput,
     resolver: zodResolver(calculatorSchema),
@@ -91,9 +108,7 @@ export function Calculator({
   const [drink, setDrink] = useState<keyof typeof presets | "custom">(
     "cappuccino",
   );
-  const [productId, setProductId] = useState(
-    compatibleCatalog ? String(initialProduct.id) : "custom",
-  );
+  const [productId, setProductId] = useState(initialProductId);
   const [notice, setNotice] = useState("");
   const [methodOpen, setMethodOpen] = useState(false);
   const upload = useRef<HTMLInputElement>(null);
@@ -118,11 +133,12 @@ export function Calculator({
         setDrink("custom");
         setProductId("custom");
         setNotice("Сохранённый расчёт восстановлен на этом устройстве.");
-      } else form.reset(createInitialInput(savedContext, catalog));
+      } else
+        form.reset(initialCalculatorInput(savedContext, catalog, settings));
     } catch {
       setNotice("Сохранённый расчёт недоступен. Загружены начальные значения.");
     }
-  }, [form, catalog, initialContext]);
+  }, [form, catalog, initialContext, settings]);
 
   /** Switches isolated market scenarios without relabeling monetary amounts.
    *
@@ -149,7 +165,7 @@ export function Calculator({
     } catch {
       /* Session drafts remain available when browser storage is disabled. */
     }
-    form.reset(target ?? createInitialInput(next, catalog));
+    form.reset(target ?? initialCalculatorInput(next, catalog, settings));
     setContext(next);
     setDrink("custom");
     setProductId("custom");
@@ -161,7 +177,7 @@ export function Calculator({
   function selectDrink(key: keyof typeof presets) {
     setDrink(key);
     const preset = presets[key];
-    (compatibleCatalog
+    (compatibleCatalog && !settings
       ? (["dose", "milk", "syrup", "salePrice"] as const)
       : (["dose", "milk", "syrup"] as const)
     ).forEach((name) =>
@@ -171,7 +187,9 @@ export function Calculator({
       }),
     );
     setNotice(
-      `Выбран ${preset.name.toLowerCase()}. Рецептура и цена продажи — пример, их можно изменить.`,
+      compatibleCatalog && !settings
+        ? `Выбран ${preset.name.toLowerCase()}. Рецептура и цена продажи — пример, их можно изменить.`
+        : `Выбран ${preset.name.toLowerCase()}. Рецептура — пример, её можно изменить. Цена продажи сохранена.`,
     );
   }
 
@@ -252,11 +270,12 @@ export function Calculator({
             <span /> ДЛЯ ВАШЕГО КОФЕЙНОГО БИЗНЕСА
           </div>
           <Heading className={styles["title"]}>
-            Сколько приносит ваша чашка кофе?
+            {settings?.content.calculatorTitle ??
+              "Сколько приносит ваша чашка кофе?"}
           </Heading>
           <p>
-            Рассчитайте себестоимость напитка и потенциальную прибыль.
-            Подставьте свои цены, рецепт и объём продаж.
+            {settings?.content.calculatorDescription ??
+              "Рассчитайте себестоимость напитка и потенциальную прибыль. Подставьте свои цены, рецепт и объём продаж."}
           </p>
           <div className={styles["intro-tags"]}>
             <span>
@@ -301,9 +320,7 @@ export function Calculator({
             className={styles["icon-button"]}
             onClick={() => {
               form.reset(initialInput);
-              setProductId(
-                compatibleCatalog ? String(initialProduct.id) : "custom",
-              );
+              setProductId(initialProductId);
               setDrink("cappuccino");
               setNotice(
                 "Начальные значения восстановлены. Сохранённый расчёт изменится после нажатия «Сохранить».",
@@ -450,10 +467,10 @@ export function Calculator({
                   <strong>Ваши цены — ваш расчёт</strong>
                   <p>
                     Для выбранного рынка и валюты каталог не подключён. Укажите
-                    цены поставщиков и расходы в {currency}. Для начала заполнен
-                    небольшой демонстрационный сценарий. Это условные суммы, а
-                    не местные рыночные цены или минимальные требования к
-                    бизнесу.
+                    цены поставщиков и расходы в {currency}.{" "}
+                    {settings
+                      ? "Начальные значения настроены владельцем калькулятора. Проверьте их для вашего бизнеса."
+                      : "Для начала заполнен небольшой демонстрационный сценарий. Это условные суммы, а не местные рыночные цены или минимальные требования к бизнесу."}
                   </p>
                 </div>
               )}
@@ -575,7 +592,12 @@ export function Calculator({
           </aside>
         )}
       </div>
-      <PnlOffer input={input} context={context} anchorId={pnlAnchorId} />
+      <PnlOffer
+        input={input}
+        context={context}
+        anchorId={pnlAnchorId}
+        settings={settings}
+      />
       <section
         className={styles["methodology"] + " " + styles["panel"]}
         id={methodId}

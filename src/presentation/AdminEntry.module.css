@@ -1,0 +1,128 @@
+.page {
+  min-height: 100vh;
+  background: #f6f2ec;
+  color: #30261f;
+  display: flex;
+  align-items: center;
+  flex-direction: column;
+  justify-content: center;
+  padding: 48px 20px;
+  font-family: Roboto, Arial, sans-serif;
+}
+.brand {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  color: #30261f;
+  text-decoration: none;
+  font:
+    700 18px Montserrat,
+    Arial,
+    sans-serif;
+  letter-spacing: 0.05em;
+  margin-bottom: 32px;
+}
+.card {
+  width: 100%;
+  max-width: 510px;
+  background: #fff;
+  border: 1px solid #e7ded2;
+  border-radius: 24px;
+  padding: 40px;
+  box-shadow: 0 18px 65px #35281908;
+}
+.icon {
+  background: #f2e9dc;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 58px;
+  height: 58px;
+  border-radius: 17px;
+  color: #76512e;
+}
+.eyebrow {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.13em;
+  color: #907451;
+  margin-top: 24px;
+}
+.card h1 {
+  font:
+    700 28px/1.25 Montserrat,
+    Arial,
+    sans-serif;
+  margin: 12px 0 16px;
+}
+.card p:not(.eyebrow) {
+  color: #766b61;
+  line-height: 1.6;
+  font-size: 15px;
+}
+.primary {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  width: 100%;
+  background: #503623;
+  color: #fff;
+  border: 0;
+  padding: 15px 18px;
+  border-radius: 12px;
+  font:
+    600 14px/1.4 Montserrat,
+    Arial,
+    sans-serif;
+  text-align: center;
+  text-decoration: none;
+  margin-top: 26px;
+  cursor: pointer;
+}
+.primary:hover {
+  background: #342317;
+}
+.primary:disabled {
+  opacity: 0.6;
+  cursor: wait;
+}
+.safe {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  font-size: 12px;
+  line-height: 1.5;
+  color: #8a8178;
+  border-top: 1px solid #f0eae3;
+  margin-top: 28px;
+  padding-top: 22px;
+}
+.back {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  color: #756858;
+  text-decoration: none;
+  margin-top: 28px;
+}
+.card .error {
+  color: #a53629 !important;
+}
+.primary:focus-visible,
+.back:focus-visible,
+.brand:focus-visible {
+  outline: 3px solid #ad875b;
+  outline-offset: 4px;
+}
+@media (max-width: 540px) {
+  .page {
+    padding: 28px 16px;
+  }
+  .card {
+    padding: 28px 22px;
+  }
+  .card h1 {
+    font-size: 24px;
+  }
+}

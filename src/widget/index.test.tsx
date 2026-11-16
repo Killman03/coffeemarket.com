@@ -4,6 +4,8 @@ import { render, screen } from "@testing-library/react";
 import { mountCoffeeCalculator } from "./index";
 import { Calculator } from "../presentation/Calculator";
 import { catalogRepository } from "../infrastructure/catalog-repository";
+import { createDefaultSettings } from "../application/site-settings";
+import { toPublicSettings } from "../domain/site-settings";
 
 vi.mock("../presentation/ProfitChart", () => ({
   ProfitChart: () => <div>График</div>,
@@ -38,6 +40,30 @@ describe("embedded integration", () => {
       mountCoffeeCalculator(host, { catalog: { products: [] } }),
     ).toThrow();
     expect(host).toBeEmptyDOMElement();
+  });
+
+  it("validates public host settings before creating a React root", () => {
+    const host = document.createElement("div");
+    expect(() =>
+      mountCoffeeCalculator(host, { settings: { defaults: {} } }),
+    ).toThrow();
+    expect(host).toBeEmptyDOMElement();
+  });
+
+  it("accepts configured public defaults in a portable host", async () => {
+    const settings = toPublicSettings(createDefaultSettings());
+    settings.defaults.KGS.coffeePrice = 2222;
+    settings.content.calculatorTitle = "Калькулятор партнёра";
+    const host = document.createElement("div");
+    document.body.appendChild(host);
+    let unmount = () => {};
+    await act(async () => {
+      unmount = mountCoffeeCalculator(host, { settings });
+    });
+    expect(host.querySelector("h2")).toHaveTextContent("Калькулятор партнёра");
+    expect(screen.getByLabelText("Цена кофе")).toHaveValue(2222);
+    await act(async () => unmount());
+    host.remove();
   });
 
   it("uses unique field and accessibility IDs across two instances", () => {

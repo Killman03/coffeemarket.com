@@ -1,4 +1,4 @@
-# Архитектура Coffee Market 2.0
+# Архитектура Coffee Market 2.1
 
 ## Продукт и границы
 
@@ -62,3 +62,13 @@ JSON v2 содержит version, context {market,currency}, input, savedAt. С�
 ## Переносимость
 
 Калькулятор и Excel не зависят от Sites. Node standalone запускает UI; для Telegram на другом хостинге нужно реализовать постоянный DeliveryRepository и связать его с HTTP-обработчиками. Для Django подходят существующие models/services/views. Отдельный микросервис не обязателен. Ни sys.path/PYTHONPATH, ни runtime-модификации библиотек не используются. npm overrides применяются только для исправленных транзитивных зависимостей и проверяются тестами и аудитом.
+
+## Настройки и администрирование
+
+Домен src/domain/site-settings.ts задаёт строгую версионированную Zod-схему, нормализованные адреса, шаблон сообщения и публичную проекцию PublicSettings. src/application/site-settings.ts создаёт независимые стартовые наборы. src/application/public-calculator-settings.ts выбирает их по валюте без конвертации и каталожной подмены. UI принимает PublicSettings как данные; browser storage посетителя имеет приоритет.
+
+src/server/settings-repository.ts реализует SettingsRepository через D1 prepared statements. Три таблицы site_owner/site_settings/site_settings_audit создаёт миграция 0001; прежний SQL неизменён. Полный документ настроек имеет version=1 и revision для CAS. Запись настроек и аудит метаданных атомарны через D1 batch; проигравший конкурент получает null/HTTP409. Аудит не хранит копии контактов или секретов. Порты допускают PostgreSQL-реализацию со стандартной транзакцией и UPDATE WHERE revision.
+
+src/server/admin.ts содержит проверку владельца, CSRF и сценарии HTTP, независимые от Next/Sites. app/admin/dependencies.ts — единственная связка с официальным Sites auth helper app/chatgpt-auth.ts. Проверка доступа повторяется в API, а не только в UI. Публичная страница динамическая, получает только content/defaults; конфигурация доставки читается заново из БД. HTTP ответы API no-store, тела ограничены, валидация клиент/сервер одна. Админка не принимает HTML и не раскрывает токены.
+
+Identity gateway Sites обязан удалять клиентские oai-authenticated-user-* и подставлять проверенные заголовки. Эти заголовки нельзя считать доверенными при прямом запуске произвольного Node-сервера. Переносимый калькулятор доступен без БД; админка на таком сервере закрыта до подключения identity/storage адаптеров. В Django используйте существующие authentication, staff permissions, CSRF middleware и ModelAdmin для эквивалентных настроек; интерфейс можно перенести, но копировать доверие к внешним заголовкам нельзя. Детали — docs/ADMIN.md.

@@ -2,40 +2,33 @@ import { AsyncLocalStorage } from "node:async_hooks";
 import { z } from "zod";
 import { D1DeliveryRepository } from "./d1-repository";
 import { TelegramGateway } from "./telegram";
-import type { DeliveryDependencies } from "./delivery";
+import type { DeliveryDependencies, CleanupDependencies } from "./delivery";
 import { createPnlWorkbook } from "../infrastructure/pnl-workbook";
-import { phoneSchema } from "../domain/contact";
+import { D1SettingsRepository } from "./settings-repository";
+import { createDefaultSettings } from "../application/site-settings";
+import type { SiteSettings } from "../domain/site-settings";
 
 export type DeliveryEnvironment = {
   PNL_DB?: D1Database;
   TELEGRAM_BOT_TOKEN?: string;
-  TELEGRAM_MANAGER_USERNAME?: string;
-  TELEGRAM_MANAGER_PHONE?: string;
   TELEGRAM_MANAGER_USER_ID?: string;
   TELEGRAM_BUSINESS_CONNECTION_ID?: string;
   TELEGRAM_WEBHOOK_SECRET?: string;
   PNL_PUBLIC_ORIGIN?: string;
+  SITE_ORIGIN?: string;
+  ADMIN_BOOTSTRAP_EMAIL?: string;
 };
 const environments = new AsyncLocalStorage<DeliveryEnvironment>();
-const configSchema = z
-  .object({
-    TELEGRAM_BOT_TOKEN: z.string().regex(/^[0-9]+:[A-Za-z0-9_-]{20,}$/),
-    TELEGRAM_MANAGER_USERNAME: z
-      .string()
-      .regex(/^[A-Za-z][A-Za-z0-9_]{4,31}$/)
-      .optional(),
-    TELEGRAM_MANAGER_PHONE: phoneSchema.optional(),
-    TELEGRAM_MANAGER_USER_ID: z.coerce.number().int().positive(),
-    TELEGRAM_BUSINESS_CONNECTION_ID: z.string().min(1).max(256),
-    TELEGRAM_WEBHOOK_SECRET: z.string().regex(/^[A-Za-z0-9_-]{32,256}$/),
-    PNL_PUBLIC_ORIGIN: z.url().refine((value) => {
-      const url = new URL(value);
-      return url.protocol === "https:" && url.origin === value;
-    }),
-  })
-  .refine((value) =>
-    Boolean(value.TELEGRAM_MANAGER_USERNAME || value.TELEGRAM_MANAGER_PHONE),
-  );
+const configSchema = z.object({
+  TELEGRAM_BOT_TOKEN: z.string().regex(/^[0-9]+:[A-Za-z0-9_-]{20,}$/),
+  TELEGRAM_MANAGER_USER_ID: z.coerce.number().int().positive(),
+  TELEGRAM_BUSINESS_CONNECTION_ID: z.string().min(1).max(256),
+  TELEGRAM_WEBHOOK_SECRET: z.string().regex(/^[A-Za-z0-9_-]{32,256}$/),
+  PNL_PUBLIC_ORIGIN: z.url().refine((value) => {
+    const url = new URL(value);
+    return url.protocol === "https:" && url.origin === value;
+  }),
+});
 
 /** Supplies hosting bindings within one request, never a process-global secret. */
 export function runWithDeliveryRuntime<T>(
@@ -45,17 +38,82 @@ export function runWithDeliveryRuntime<T>(
   return environments.run(env, callback);
 }
 
-/** Builds adapters only when every required production dependency is configured. */
-export function getDeliveryRuntime(): DeliveryDependencies | null {
+/** Returns the current request's bindings without retaining credentials globally. */
+export function getRuntimeEnvironment(): DeliveryEnvironment | undefined {
+  return environments.getStore();
+}
+
+/** Opens the settings adapter when durable storage is bound to this request. */
+export function getSettingsRepository(): D1SettingsRepository | null {
+  const db = environments.getStore()?.PNL_DB;
+  return db ? new D1SettingsRepository(db) : null;
+}
+
+/** Loads current settings; standalone calculator builds retain explicit defaults. */
+export async function getSiteSettings(): Promise<SiteSettings> {
+  const repository = getSettingsRepository();
+  return repository
+    ? (await repository.get()).settings
+    : createDefaultSettings();
+}
+
+/** Reports server dependency readiness without exposing credential values. */
+export function getDeliveryStatus(): {
+  deliveryReady: boolean;
+  missing: string[];
+} {
+  const env = environments.getStore();
+  const parsed = configSchema.safeParse(env);
+  const labels: Record<string, string> = {
+    TELEGRAM_BOT_TOKEN: "Токен бизнес-бота",
+    TELEGRAM_MANAGER_USER_ID: "Telegram ID менеджера",
+    TELEGRAM_BUSINESS_CONNECTION_ID: "Подключение Telegram Business",
+    TELEGRAM_WEBHOOK_SECRET: "Секрет вебхука",
+    PNL_PUBLIC_ORIGIN: "Публичный адрес для Excel",
+  };
+  const missing = new Set(
+    parsed.success
+      ? []
+      : parsed.error.issues.map(
+          (issue) => labels[String(issue.path[0])] ?? "Конфигурация Telegram",
+        ),
+  );
+  if (!env?.PNL_DB) missing.add("База данных");
+  return { deliveryReady: missing.size === 0, missing: [...missing] };
+}
+
+/** Keeps retention available even while the administrator pauses new requests. */
+export function getCleanupRuntime(): CleanupDependencies | null {
+  const env = environments.getStore();
+  const secret = z
+    .string()
+    .regex(/^[A-Za-z0-9_-]{32,256}$/)
+    .safeParse(env?.TELEGRAM_WEBHOOK_SECRET);
+  return env?.PNL_DB && secret.success
+    ? {
+        repository: new D1DeliveryRepository(env.PNL_DB),
+        webhookSecret: secret.data,
+      }
+    : null;
+}
+
+/** Builds adapters from current durable settings and server-only credentials. */
+export async function getDeliveryRuntime(): Promise<DeliveryDependencies | null> {
   const env = environments.getStore();
   const parsed = configSchema.safeParse(env);
   if (!parsed.success || !env?.PNL_DB) return null;
   const config = parsed.data;
+  const { telegram } = await getSiteSettings();
+  if (
+    !telegram.enabled ||
+    (!telegram.managerUsername && !telegram.managerPhone)
+  )
+    return null;
   return {
     repository: new D1DeliveryRepository(env.PNL_DB),
     telegram: new TelegramGateway(config.TELEGRAM_BOT_TOKEN),
-    managerTarget:
-      config.TELEGRAM_MANAGER_USERNAME ?? config.TELEGRAM_MANAGER_PHONE!,
+    managerTarget: telegram.managerUsername || telegram.managerPhone,
+    messageTemplate: telegram.messageTemplate,
     managerUserId: config.TELEGRAM_MANAGER_USER_ID,
     businessConnectionId: config.TELEGRAM_BUSINESS_CONNECTION_ID,
     webhookSecret: config.TELEGRAM_WEBHOOK_SECRET,

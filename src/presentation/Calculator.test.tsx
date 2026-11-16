@@ -4,6 +4,8 @@ import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { Calculator } from "./Calculator";
 import { catalogRepository } from "../infrastructure/catalog-repository";
 import { BrowserScenarioStore } from "../infrastructure/scenario-storage";
+import { publicSettingsSchema } from "../domain/site-settings";
+import { currencies } from "../domain/markets";
 import {
   createScenario,
   defaultInput,
@@ -19,7 +21,132 @@ afterEach(() => {
 const renderCalculator = () =>
   render(<Calculator catalog={catalogRepository.getCatalog()} />);
 
+function configuredSettings() {
+  return publicSettingsSchema.parse({
+    defaults: Object.fromEntries(
+      currencies.map(({ code }) => [
+        code,
+        {
+          ...defaultInput,
+          coffeePrice: code === "USD" ? 23 : 555,
+          salePrice: code === "USD" ? 8 : 999,
+          rent: code === "USD" ? 400 : 45000,
+        },
+      ]),
+    ),
+    content: {
+      calculatorTitle: "<img src=x onerror=alert(1)>",
+      calculatorDescription: "Описание расчёта <strong>без HTML</strong>",
+      pnlTitle: "<script>alert(1)</script>",
+      pnlDescription: "Ваш план на три месяца",
+      pnlButtonLabel: "Забрать мой план",
+    },
+  });
+}
+
 describe("calculator interactions", () => {
+  it("uses configured Kyrgyz defaults without catalog or recipe price replacement", async () => {
+    render(
+      <Calculator
+        catalog={catalogRepository.getCatalog()}
+        settings={configuredSettings()}
+      />,
+    );
+    expect(screen.getByLabelText("Цена кофе")).toHaveValue(555);
+    expect(screen.getByLabelText("Кофе из каталога Coffee Market")).toHaveValue(
+      "custom",
+    );
+    fireEvent.click(screen.getByRole("button", { name: /Американо/ }));
+    expect(screen.getByLabelText("Цена продажи чашки")).toHaveValue(999);
+    fireEvent.change(screen.getByLabelText("Цена кофе"), {
+      target: { value: "700" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Сбросить параметры" }));
+    expect(screen.getByLabelText("Цена кофе")).toHaveValue(555);
+    expect(screen.getByLabelText("Цена продажи чашки")).toHaveValue(999);
+    fireEvent.change(screen.getByLabelText("Кофе из каталога Coffee Market"), {
+      target: { value: "60" },
+    });
+    expect(screen.getByLabelText("Цена кофе")).toHaveValue(1899);
+  });
+
+  it("uses defaults for the selected currency when entering a new market scenario", async () => {
+    render(
+      <Calculator
+        catalog={catalogRepository.getCatalog()}
+        settings={configuredSettings()}
+        initialContext={{ market: "OTHER", currency: "USD" }}
+      />,
+    );
+    expect(screen.getByLabelText("Цена кофе")).toHaveValue(23);
+    expect(screen.getByLabelText("Цена продажи чашки")).toHaveValue(8);
+    expect(
+      screen.queryByLabelText("Кофе из каталога Coffee Market"),
+    ).toBeNull();
+    fireEvent.change(screen.getByLabelText("Рынок", { exact: true }), {
+      target: { value: "KZ" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: /^Перейти$/ }));
+    await waitFor(() =>
+      expect(screen.getByLabelText("Валюта расчёта")).toHaveValue("KZT"),
+    );
+    expect(screen.getByLabelText("Цена кофе")).toHaveValue(555);
+    expect(screen.getByLabelText("Цена продажи чашки")).toHaveValue(999);
+  });
+
+  it("preserves saved zero values and unsaved edits across parent settings rerenders", async () => {
+    const store = new BrowserScenarioStore(window.localStorage);
+    store.save({ ...defaultInput, coffeePrice: 0, salePrice: 0, rent: 0 });
+    const page = render(
+      <Calculator
+        catalog={catalogRepository.getCatalog()}
+        settings={configuredSettings()}
+      />,
+    );
+    await waitFor(() =>
+      expect(screen.getByLabelText("Цена кофе")).toHaveValue(0),
+    );
+    expect(screen.getByLabelText("Цена продажи чашки")).toHaveValue(0);
+    fireEvent.change(screen.getByLabelText("Цена кофе"), {
+      target: { value: "123" },
+    });
+    const updatedSettings = configuredSettings();
+    updatedSettings.defaults.KGS.coffeePrice = 9999;
+    page.rerender(
+      <Calculator
+        catalog={catalogRepository.getCatalog()}
+        settings={updatedSettings}
+      />,
+    );
+    expect(screen.getByLabelText("Цена кофе")).toHaveValue(123);
+    expect(screen.getByLabelText("Цена продажи чашки")).toHaveValue(0);
+  });
+
+  it("renders configured public content as escaped text", () => {
+    const settings = configuredSettings();
+    const page = render(
+      <Calculator
+        catalog={catalogRepository.getCatalog()}
+        settings={settings}
+      />,
+    );
+    expect(
+      screen.getByRole("heading", { name: settings.content.calculatorTitle }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText(settings.content.calculatorDescription),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("heading", { name: settings.content.pnlTitle }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText(settings.content.pnlDescription),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: settings.content.pnlButtonLabel }),
+    ).toBeInTheDocument();
+    expect(page.container.querySelector("script, img")).toBeNull();
+  });
   it("opens and resets a populated manual example while preserving explicit saved zero values", async () => {
     const context = { market: "OTHER", currency: "USD" } as const;
     const store = new BrowserScenarioStore(window.localStorage);

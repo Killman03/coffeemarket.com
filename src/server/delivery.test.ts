@@ -113,6 +113,7 @@ function webhook(
   updateId = 1,
   senderId = 42,
   connectionId = "business-123",
+  customText?: string,
 ) {
   return new Request("https://example.com/api/telegram/webhook", {
     method: "POST",
@@ -126,7 +127,9 @@ function webhook(
         business_connection_id: connectionId,
         chat: { id: senderId, type: "private" },
         from: { id: senderId, is_bot: false },
-        text: `Здравствуйте! Хочу P&L на 3 месяца. Код расчёта: CM_${ticket}`,
+        text:
+          customText ??
+          `Здравствуйте! Хочу P&L на 3 месяца. Код расчёта: CM_${ticket}`,
       },
     }),
   });
@@ -142,6 +145,35 @@ async function create(deps: DeliveryDependencies) {
 }
 
 describe("manager-chat P&L delivery", () => {
+  it("uses the configured template and accepts its single opaque marker after copy changes", async () => {
+    const { deps, telegram } = setup();
+    deps.messageTemplate =
+      "Мой план: {code}. Рынок {market}, валюта {currency}.";
+    const response = await createDeliveryRequest(request(), deps);
+    const { telegramUrl } = (await response.json()) as { telegramUrl: string };
+    const text = new URL(telegramUrl).searchParams.get("text")!;
+    expect(text).toContain("Рынок Кыргызстан, валюта KGS.");
+    const ticket = text.match(/CM_([A-Za-z0-9_-]{32})/)![1];
+    deps.messageTemplate = "Новый шаблон {code}";
+    await handleTelegramWebhook(
+      webhook(ticket, 1, 42, "business-123", text),
+      deps,
+    );
+    expect(telegram.document).toHaveBeenCalledTimes(1);
+  });
+  it("ignores ambiguous or malformed markers", async () => {
+    const { deps, telegram } = setup();
+    const ticket = await create(deps);
+    for (const [index, text] of [
+      `CM_${ticket} CM_${ticket}`,
+      `CM_${ticket}extra`,
+    ].entries())
+      await handleTelegramWebhook(
+        webhook(ticket, index + 1, 42, "business-123", text),
+        deps,
+      );
+    expect(telegram.document).not.toHaveBeenCalled();
+  });
   it("requires scheduler authentication and never returns retained personal data", async () => {
     const { deps, repository } = setup();
     const cleanup = vi.spyOn(repository, "cleanup");

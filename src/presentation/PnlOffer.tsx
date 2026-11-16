@@ -8,6 +8,7 @@ import { z } from "zod";
 import { phoneSchema, CONSENT_TEXT } from "../domain/contact";
 import type { CalculatorInput } from "../domain/calculator";
 import type { MarketContext } from "../domain/markets";
+import type { PublicSettings } from "../domain/site-settings";
 import styles from "./Calculator.module.css";
 
 const contactSchema = z.object({
@@ -32,6 +33,7 @@ const deliverySchema = z.object({
  * Args:
  *   input: Valid scenario or null while the calculator has validation errors.
  *   context: Market and currency included in the personalized workbook.
+ *   settings: Optional public text supplied by the composition root.
  *
  * Returns:
  *   Workbook preview and a contact form only when delivery is configured.
@@ -40,10 +42,12 @@ export function PnlOffer({
   input,
   context,
   anchorId,
+  settings,
 }: {
   input: CalculatorInput | null;
   context: MarketContext;
   anchorId?: string;
+  settings?: PublicSettings;
 }) {
   const id = useId();
   const [ready, setReady] = useState(false);
@@ -118,13 +122,17 @@ export function PnlOffer({
           <FileSpreadsheet size={17} /> EXCEL ДЛЯ ВАШЕГО БИЗНЕСА
         </span>
         <h2 id={id + "-title"}>
-          Следующий шаг — P&amp;L
-          <br />
-          на 3 месяца
+          {settings?.content.pnlTitle ?? (
+            <>
+              Следующий шаг — P&amp;L
+              <br />
+              на 3 месяца
+            </>
+          )}
         </h2>
         <p>
-          Превратите расчёт одной чашки в редактируемый план кофейной точки.
-          Добавьте меню, сравните сценарии и отслеживайте план и факт.
+          {settings?.content.pnlDescription ??
+            "Превратите расчёт одной чашки в редактируемый план кофейной точки. Добавьте меню, сравните сценарии и отслеживайте план и факт."}
         </p>
         <ul>
           {[
@@ -147,7 +155,7 @@ export function PnlOffer({
             aria-controls={id + "-contact"}
           >
             <Send size={16} />
-            Получить в Telegram
+            {settings?.content.pnlButtonLabel ?? "Получить в Telegram"}
           </button>
           <a
             href="/templates/coffee-market-pnl-3-months.xlsx"

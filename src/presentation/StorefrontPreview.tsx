@@ -1,17 +1,25 @@
 import { ArrowRight, Coffee, ExternalLink } from "lucide-react";
 import { Calculator } from "./Calculator";
 import type { Catalog } from "../domain/catalog";
+import type { PublicSettings } from "../domain/site-settings";
 import styles from "./StorefrontPreview.module.css";
 
 /** Shows store context separately from the embeddable calculator.
  *
  * Args:
  *   catalog: Public product data supplied by the composition root.
+ *   settings: Optional public defaults and text from the site's settings.
  *
  * Returns:
  *   A standalone preview page. Host pages import Calculator directly.
  */
-export function StorefrontPreview({ catalog }: { catalog: Catalog }) {
+export function StorefrontPreview({
+  catalog,
+  settings,
+}: {
+  catalog: Catalog;
+  settings?: PublicSettings;
+}) {
   return (
     <div className={styles.page}>
       <header className={styles.header}>
@@ -30,7 +38,7 @@ export function StorefrontPreview({ catalog }: { catalog: Catalog }) {
       </header>
       <main className={styles.main}>
         <div id="calculator">
-          <Calculator catalog={catalog} pnlAnchorId="pnl" />
+          <Calculator catalog={catalog} pnlAnchorId="pnl" settings={settings} />
         </div>
         <section className={styles.nextStep}>
           <div className={styles.nextIcon}>
@@ -51,6 +59,7 @@ export function StorefrontPreview({ catalog }: { catalog: Catalog }) {
           <a href="https://coffeemarket.kg/contact/">
             Помощь с выбором оборудования <ArrowRight size={13} />
           </a>
+          <a href="/admin">Управление сайтом</a>
         </footer>
       </main>
     </div>

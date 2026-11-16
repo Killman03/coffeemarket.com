@@ -6,11 +6,17 @@ import {
   type TelegramUpdate,
 } from "./contracts";
 import { TelegramError, type TelegramGateway } from "./telegram";
+import { buildManagerTelegramUrl } from "../domain/site-settings";
+import { createDefaultSettings } from "../application/site-settings";
+import { markets } from "../domain/markets";
+import { json, readJson } from "./http";
+export { json } from "./http";
 
 export type DeliveryDependencies = {
   repository: DeliveryRepository;
   telegram: Pick<TelegramGateway, "message" | "document" | "verifyConnection">;
   managerTarget: string;
+  messageTemplate?: string;
   managerUserId: number;
   businessConnectionId: string;
   webhookSecret: string;
@@ -18,6 +24,10 @@ export type DeliveryDependencies = {
   workbook: (payload: PnlRequest) => Promise<ArrayBuffer>;
   now?: () => number;
 };
+export type CleanupDependencies = Pick<
+  DeliveryDependencies,
+  "repository" | "webhookSecret" | "now"
+>;
 
 export const unavailable = () =>
   json(
@@ -27,14 +37,6 @@ export const unavailable = () =>
     },
     503,
   );
-export const json = (body: unknown, status = 200) =>
-  Response.json(body, {
-    status,
-    headers: {
-      "cache-control": "no-store",
-      "x-content-type-options": "nosniff",
-    },
-  });
 
 /** Hashes opaque identifiers so database access does not reveal usable tickets. */
 export async function digest(value: string) {
@@ -52,48 +54,6 @@ async function equalSecret(provided: string | null, expected: string) {
   for (let i = 0; i < a.length; i++)
     difference |= a.charCodeAt(i) ^ b.charCodeAt(i);
   return difference === 0;
-}
-
-/** Reads a bounded JSON body using the platform stream and JSON parser.
- *
- * Args:
- *   request: Incoming HTTP request.
- *   limit: Maximum accepted byte count, including streamed bodies.
- *
- * Returns:
- *   Parsed untrusted JSON, ready for schema validation.
- */
-async function readJson(request: Request, limit: number): Promise<unknown> {
-  if (
-    !request.headers
-      .get("content-type")
-      ?.toLowerCase()
-      .startsWith("application/json")
-  )
-    throw new Error("Invalid content type");
-  if (Number(request.headers.get("content-length")) > limit)
-    throw new Error("Body too large");
-  const reader = request.body?.getReader();
-  if (!reader) throw new Error("Missing body");
-  const chunks: Uint8Array[] = [];
-  let size = 0;
-  while (true) {
-    const { done, value } = await reader.read();
-    if (done) break;
-    size += value.byteLength;
-    if (size > limit) {
-      await reader.cancel();
-      throw new Error("Body too large");
-    }
-    chunks.push(value);
-  }
-  const bytes = new Uint8Array(size);
-  let offset = 0;
-  for (const chunk of chunks) {
-    bytes.set(chunk, offset);
-    offset += chunk.length;
-  }
-  return JSON.parse(new TextDecoder().decode(bytes));
 }
 
 /** Stores explicit consent and creates a fifteen-minute manager-chat ticket. */
@@ -142,9 +102,27 @@ export async function createDeliveryRequest(
         { error: "Слишком много запросов. Попробуйте через 10 минут." },
         429,
       );
-    const text = `Здравствуйте! Хочу P&L на 3 месяца. Код расчёта: CM_${ticket}`;
+    const telegramUrl = buildManagerTelegramUrl(
+      {
+        enabled: true,
+        managerUsername: deps.managerTarget.startsWith("+")
+          ? ""
+          : deps.managerTarget,
+        managerPhone: deps.managerTarget.startsWith("+")
+          ? deps.managerTarget
+          : "",
+        messageTemplate:
+          deps.messageTemplate ??
+          createDefaultSettings().telegram.messageTemplate,
+      },
+      {
+        code: `CM_${ticket}`,
+        market: markets.find((market) => market.code === context.market)!.name,
+        currency: context.currency,
+      },
+    );
     return json({
-      telegramUrl: `https://t.me/${deps.managerTarget}?text=${encodeURIComponent(text)}`,
+      telegramUrl,
       expiresAt,
     });
   } catch {
@@ -170,11 +148,15 @@ async function processUpdate(
   const chatId = message.chat.id;
   const userId = message.from.id;
   const now = deps.now?.() ?? Date.now();
-  // Only the exact, intentionally sent request message triggers automation.
-  const ticket = message.text?.match(
-    /^Здравствуйте! Хочу P&L на 3 месяца\. Код расчёта: CM_([A-Za-z0-9_-]{32})$/,
-  )?.[1];
-  if (!ticket) return;
+  // A single opaque marker identifies an explicitly submitted, short-lived request.
+  // Issued links keep working after the administrator changes the surrounding copy.
+  const markers = [
+    ...(message.text ?? "").matchAll(
+      /(?<![A-Za-z0-9_-])CM_([A-Za-z0-9_-]{32})(?![A-Za-z0-9_-])/g,
+    ),
+  ];
+  if (markers.length !== 1) return;
+  const ticket = markers[0][1];
   if (
     !(await deps.telegram.verifyConnection(
       deps.businessConnectionId,
@@ -260,7 +242,7 @@ export async function handleTelegramWebhook(
 /** Runs retention cleanup for a trusted scheduler without returning lead data. */
 export async function cleanupDeliveryData(
   request: Request,
-  deps: DeliveryDependencies | null,
+  deps: CleanupDependencies | null,
 ) {
   if (!deps) return unavailable();
   if (

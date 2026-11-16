@@ -1,6 +1,13 @@
 import { getDeliveryRuntime } from "../../../../src/server/runtime";
-import { createDeliveryRequest } from "../../../../src/server/delivery";
+import {
+  createDeliveryRequest,
+  unavailable,
+} from "../../../../src/server/delivery";
 
-export function POST(request: Request) {
-  return createDeliveryRequest(request, getDeliveryRuntime());
+export async function POST(request: Request) {
+  try {
+    return await createDeliveryRequest(request, await getDeliveryRuntime());
+  } catch {
+    return unavailable();
+  }
 }

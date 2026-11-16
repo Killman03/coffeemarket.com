@@ -1,6 +1,13 @@
-import { getDeliveryRuntime } from "../../../../src/server/runtime";
-import { cleanupDeliveryData } from "../../../../src/server/delivery";
+import { getCleanupRuntime } from "../../../../src/server/runtime";
+import {
+  cleanupDeliveryData,
+  unavailable,
+} from "../../../../src/server/delivery";
 
-export function POST(request: Request) {
-  return cleanupDeliveryData(request, getDeliveryRuntime());
+export async function POST(request: Request) {
+  try {
+    return await cleanupDeliveryData(request, getCleanupRuntime());
+  } catch {
+    return unavailable();
+  }
 }

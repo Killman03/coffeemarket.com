@@ -1,4 +1,4 @@
-# Встраивание и перенос 2.0
+# Встраивание и перенос 2.1
 
 Основной продукт теперь самостоятельный сайт. Встраиваемый компонент сохранён для будущего подключения к Django.
 
@@ -34,3 +34,9 @@ Calculator не содержит собственные html/body/main, нави
 PnlOffer ожидает /api/pnl/config, /api/pnl/requests на origin хоста и пример по /templates/coffee-market-pnl-3-months.xlsx. При копировании шаблона в Django согласуйте этот URL или адаптируйте presentation-компонент; доступ к выдаче отключён, если config endpoint отсутствует. Для backend используйте порт DeliveryRepository и существующие Django services/views/models; не переносите Cloudflare D1 binding в Django.
 
 Нужна проверка на самом магазине: настоящие CSS, CSP, загрузка всех chunks, ссылки, доступность с клавиатуры, мобильная ширина, сохранение сценариев и фактический каталог. Перенос в действующий Django в этой версии не выполнялся.
+
+## Настройки из Django
+
+mountCoffeeCalculator принимает options.settings (PublicSettings): только defaults и content. Передайте валидированный объект через Django json_script, как каталог. Все восемь кодов валют обязательны; точный контракт — src/domain/site-settings.ts. Настройки не содержат секретов или конфигурации менеджера. Без settings виджет использует демонстрационные примеры. Сохранённые сценарии имеют приоритет; явный сброс загружает новые стартовые значения.
+
+Для управления в монолите рекомендуются стандартные Django ModelAdmin + permissions, не отдельная авторизация Sites. Реализуйте SettingsRepository через models/transaction.atomic с compare-and-set по revision; shared schemas/formulas остаются спецификацией и покрываются тестами соответствия. Границы авторизации, миграции и пример последовательности переноса — docs/ADMIN.md.
