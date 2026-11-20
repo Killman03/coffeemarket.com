@@ -5,7 +5,6 @@ import { PostgresSettingsRepository } from "../postgres/settings-repository";
 import { PostgresAnalyticsRepository } from "../postgres/analytics-repository";
 import { PostgresDeliveryRepository } from "../postgres/delivery-repository";
 import {
-  closeNodeRuntime,
   getApplicationRuntime,
   installNodeRuntime,
   type ApplicationRuntime,
@@ -86,11 +85,7 @@ export async function createNodeRuntime(
 export async function initializeNodeRuntime(): Promise<void> {
   if (getApplicationRuntime()) return;
   installNodeRuntime(await createNodeRuntime(process.env));
-  const close = () => {
-    void closeNodeRuntime().catch(() =>
-      console.error("PostgreSQL shutdown failed"),
-    );
-  };
-  process.once("SIGTERM", close);
-  process.once("SIGINT", close);
+  // Next.js owns SIGTERM/SIGINT and drains HTTP requests before process exit.
+  // Closing the pool from a competing signal listener would reject subsequent
+  // database operations inside requests that are still being drained.
 }
