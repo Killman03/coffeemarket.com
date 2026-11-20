@@ -2,26 +2,17 @@ import { z } from "zod";
 import { createDefaultSettings } from "../application/site-settings";
 import {
   siteSettingsSchema,
-  type SettingsSection,
   type SiteSettings,
   type SettingsEnvelope,
 } from "../domain/site-settings";
 export type { SettingsEnvelope } from "../domain/site-settings";
-
-export interface SettingsRepository {
-  get(): Promise<SettingsEnvelope>;
-  getOwner(): Promise<{ subject: string } | null>;
-  claimOwner(subject: string, now: number): Promise<boolean>;
-  save(
-    settings: SiteSettings,
-    expectedRevision: number,
-    actor: string,
-    now: number,
-  ): Promise<SettingsEnvelope | null>;
-}
-
-const subjectSchema = z.string().min(1).max(512);
-const timestampSchema = z.number().int().nonnegative();
+export type { SettingsRepository } from "./settings-contracts";
+import {
+  type SettingsRepository,
+  settingsWriteSchema,
+  changedSettingsSections,
+} from "./settings-contracts";
+import { subjectSchema, timestampSchema } from "./storage-values";
 const storedSettingsSchema = z.object({
   payload: z.string(),
   revision: z.number().int().positive(),
@@ -109,19 +100,15 @@ export class D1SettingsRepository implements SettingsRepository {
     actor: string,
     now: number,
   ): Promise<SettingsEnvelope | null> {
-    const validated = siteSettingsSchema.parse(settings);
-    const expected = z.number().int().nonnegative().parse(expectedRevision);
-    const subject = subjectSchema.parse(actor);
-    const timestamp = timestampSchema.parse(now);
+    const {
+      settings: validated,
+      expectedRevision: expected,
+      actor: subject,
+      now: timestamp,
+    } = settingsWriteSchema.parse({ settings, expectedRevision, actor, now });
     const previous = await this.get();
     if (previous.revision !== expected) return null;
-    const sections: SettingsSection[] = (
-      ["telegram", "defaults", "content"] as const
-    ).filter(
-      (section) =>
-        JSON.stringify(previous.settings[section]) !==
-        JSON.stringify(validated[section]),
-    );
+    const sections = changedSettingsSections(previous.settings, validated);
     const writeId = crypto.randomUUID();
     const payload = JSON.stringify(validated);
     const mutation =

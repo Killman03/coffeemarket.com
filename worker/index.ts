@@ -1,15 +1,16 @@
 import handler from "vinext/server/fetch-handler";
 import { runWithConnectorBinding } from "../lib/connector-context";
 import type { ConnectorBinding } from "../lib/connector-contract.mjs";
+import { runWithApplicationRuntime } from "../src/server/runtime-context";
 import {
-  runWithDeliveryRuntime,
-  type DeliveryEnvironment,
-} from "../src/server/runtime";
+  createSitesRuntime,
+  type SitesEnvironment,
+} from "../src/server/sites-runtime";
 
 const worker = {
   fetch(
     request: Request,
-    env: Cloudflare.Env & DeliveryEnvironment,
+    env: Cloudflare.Env & SitesEnvironment,
     ctx: ExecutionContext<{ CONNECTORS?: ConnectorBinding }>,
   ) {
     let binding = ctx.props?.CONNECTORS;
@@ -35,7 +36,7 @@ const worker = {
         },
       };
     }
-    return runWithDeliveryRuntime(env, () =>
+    return runWithApplicationRuntime(createSitesRuntime(env), () =>
       runWithConnectorBinding(binding, () => handler.fetch(request, env, ctx)),
     );
   },

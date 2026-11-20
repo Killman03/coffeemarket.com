@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { siteSettingsSchema } from "../domain/site-settings";
-import type { SettingsRepository } from "./settings-repository";
+import type { SettingsRepository } from "./settings-contracts";
 import { json, readJson } from "./http";
 
 export type AdminIdentity = {

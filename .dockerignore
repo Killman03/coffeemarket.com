@@ -13,6 +13,7 @@ outputs
 *.tsbuildinfo
 .dev.vars*
 *.pem
+*.log
 *.key
 *.p12
 *.pfx

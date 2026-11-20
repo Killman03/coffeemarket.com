@@ -10,13 +10,15 @@
 
 ## Обычный Node.js
 
+PostgreSQL storage-этап реализован: настройки, аналитика и delivery имеют собственные Drizzle-адаптеры. Полный порядок — [docs/POSTGRESQL.md](docs/POSTGRESQL.md). Для постоянного сервера задать STORAGE_DRIVER=postgres, DATABASE_URL и SITE_ORIGIN, затем отдельно применить `npm run db:postgres:migrate` до startup. D1-миграции к PostgreSQL не относятся.
+
 ```sh
 npm ci
 npm run build:portable
 npm run start:portable
 ```
 
-Next standalone содержит public и .next-node/static благодаря scripts/prepare-standalone.mjs. Dockerfile использует стандартный multistage Node image и непривилегированного пользователя. На любом хостинге доступны калькулятор и пример Excel. Production Telegram требует собственного постоянного адаптера DeliveryRepository и composition root: D1 bindings не появляются автоматически в Node. Контракты и SQL инварианты описаны в docs/TELEGRAM.md.
+Без конфигурации сохраняется demo. Next standalone содержит public и static благодаря scripts/prepare-standalone.mjs. Docker runner по умолчанию требует PostgreSQL, отдельный migrator запускает Drizzle Kit. Хранилище Telegram подключено, но реальная выдача требует конфигурации менеджера/бота. Админка Node закрыта до отдельной авторизации; публичный сбор аналитики от неё не зависит.
 
 ## Подключение менеджера позже
 

@@ -14,9 +14,17 @@ import {
   getDeliveryRuntime,
   getDeliveryStatus,
   getRuntimeEnvironment,
-  runWithDeliveryRuntime,
-  type DeliveryEnvironment,
 } from "./runtime";
+import {
+  createSitesRuntime,
+  type SitesEnvironment as DeliveryEnvironment,
+} from "./sites-runtime";
+import { runWithApplicationRuntime } from "./runtime-context";
+
+const runWithDeliveryRuntime = <T>(
+  environment: DeliveryEnvironment,
+  callback: () => T,
+) => runWithApplicationRuntime(createSitesRuntime(environment), callback);
 
 const env: DeliveryEnvironment = {
   PNL_DB: {} as D1Database,

@@ -24,6 +24,7 @@ next-env.d.ts
 
 # Package-manager logs
 npm-debug.log*
+*.log
 yarn-debug.log*
 yarn-error.log*
 .pnpm-debug.log*

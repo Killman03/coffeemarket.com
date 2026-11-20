@@ -17,8 +17,23 @@ jobs:
     name: Tests and builds
     runs-on: ubuntu-24.04
     timeout-minutes: 25
+    services:
+      postgres:
+        image: postgres:17-bookworm
+        env:
+          POSTGRES_USER: coffee_test
+          POSTGRES_PASSWORD: local-ci-only
+          POSTGRES_DB: coffee_market_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U coffee_test -d coffee_market_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
     env:
       NEXT_TELEMETRY_DISABLED: "1"
+      TEST_DATABASE_URL: postgresql://coffee_test:local-ci-only@127.0.0.1:5432/coffee_market_test
     steps:
       - name: Check out source
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -34,7 +49,38 @@ jobs:
       - run: npm test
       - run: npm run build:widget
       - run: npm run build:portable
+      - run: npm run db:postgres:check
+      - run: npm run test:postgres
       - run: npm run build
+      - name: Build migration and runtime container images
+        run: |
+          docker build --target migrator --tag coffee-market-migrator:ci .
+          docker build --target runner --tag coffee-market-server:ci .
+      - name: Verify container migrations and application readiness
+        env:
+          DATABASE_URL: ${{ env.TEST_DATABASE_URL }}
+        run: |
+          docker run --rm --network host --env DATABASE_URL coffee-market-migrator:ci
+          docker run --detach --name coffee-market-ci --network host \
+            --env DATABASE_URL --env SITE_ORIGIN=http://127.0.0.1:3000 coffee-market-server:ci
+          ready=0
+          for attempt in $(seq 1 30); do
+            if curl --fail --silent --max-time 2 http://127.0.0.1:3000/api/health/ready; then
+              ready=1
+              break
+            fi
+            sleep 1
+          done
+          if [ "$ready" -ne 1 ]; then
+            docker logs coffee-market-ci
+            exit 1
+          fi
+      - name: Remove CI application container
+        if: always()
+        run: |
+          if docker container inspect coffee-market-ci >/dev/null 2>&1; then
+            docker rm --force coffee-market-ci
+          fi
 
   secrets:
     name: Git history secret scan
