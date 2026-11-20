@@ -1,0 +1,4 @@
+# Sites local preview only. These are documented local mock identity values.
+# Do not copy this configuration to production or the Node.js standalone server.
+SITE_ORIGIN=http://127.0.0.1:5173
+ADMIN_BOOTSTRAP_EMAIL=seedy@sites.test

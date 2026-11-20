@@ -31,7 +31,16 @@ yarn-error.log*
 # Local environment and keys
 .env*
 .dev.vars*
+!.env.example
+!.dev.vars.example
 *.pem
+*.key
+*.p12
+*.pfx
+*.sqlite
+*.sqlite3
+*.db
+*.db-*
 
 # Checkout-local tool state
 /.wrangler/
@@ -45,3 +54,4 @@ yarn-error.log*
 
 # OS metadata
 .DS_Store
+Thumbs.db
