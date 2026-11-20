@@ -61,7 +61,7 @@ JSON v2 содержит version, context {market,currency}, input, savedAt. С�
 
 ## Переносимость
 
-Калькулятор и Excel не зависят от Sites. Node standalone запускает UI; для Telegram на другом хостинге нужно реализовать постоянный DeliveryRepository и связать его с HTTP-обработчиками. Для Django подходят существующие models/services/views. Отдельный микросервис не обязателен. Ни sys.path/PYTHONPATH, ни runtime-модификации библиотек не используются. npm overrides применяются только для исправленных транзитивных зависимостей и проверяются тестами и аудитом.
+Калькулятор и Excel не зависят от Sites. Node standalone подключает реализованные PostgreSQL-адаптеры при startup через instrumentation.ts. Порты вынесены отдельно; runtime-context предоставляет один Node runtime для route bundles и request-local bindings для Sites. Схема db/postgres/schema.ts и миграции drizzle-postgres отделены от SQLite. Независимая авторизация остаётся следующим этапом; Node не доверяет заголовкам Sites. Интерфейс и расчётное ядро сохранены. Конфигурация, транзакции, права и проверки — docs/POSTGRESQL.md. Ни sys.path/PYTHONPATH, ни runtime-модификации библиотек не используются.
 
 ## Настройки и администрирование
 

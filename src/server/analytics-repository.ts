@@ -1,7 +1,6 @@
 import {
   analyticsEventSchema,
   analyticsInterval,
-  analyticsReportSchema,
   DAY_MS,
   ANALYTICS_WINDOW_DAYS,
   type AnalyticsEvent,
@@ -9,6 +8,7 @@ import {
   type AnalyticsReport,
 } from "../domain/analytics";
 import type { AnalyticsRepository } from "./analytics-contracts";
+import { assembleAnalyticsReport } from "./analytics-report";
 
 /** Stores bounded first-party events and aggregates reports inside the database. */
 export class D1AnalyticsRepository implements AnalyticsRepository {
@@ -169,31 +169,9 @@ export class D1AnalyticsRepository implements AnalyticsRepository {
         .bind(...bindings),
       this.db.prepare(requests).bind(interval.start, interval.end, ...values),
     ]);
-    const daily = new Map(
-      results[1].results.map((raw) => {
-        const row = analyticsReportSchema.shape.daily.element.parse(raw);
-        return [row.date, row] as const;
-      }),
-    );
-    return analyticsReportSchema.parse({
-      window: {
-        from: filter.from,
-        to: filter.to,
-        timeZone: "UTC",
-        generatedAt: now,
-      },
+    return assembleAnalyticsReport(filter, now, {
       metrics: results[0].results[0],
-      daily: Array.from(
-        { length: (interval.end - interval.start) / DAY_MS },
-        (_, index) => {
-          const date = new Date(interval.start + index * DAY_MS)
-            .toISOString()
-            .slice(0, 10);
-          return (
-            daily.get(date) ?? { date, sessions: 0, engaged: 0, completed: 0 }
-          );
-        },
-      ),
+      daily: results[1].results,
       sources: results[2].results,
       markets: results[3].results,
       requests: results[4].results[0],

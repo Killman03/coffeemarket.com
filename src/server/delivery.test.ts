@@ -16,7 +16,7 @@ import { z } from "zod";
 class MemoryRepository implements DeliveryRepository {
   records = new Map<string, DeliveryRecord>();
   updates = new Map<number, "pending" | "processing" | "done">();
-  async create(record: DeliveryRecord) {
+  async create(record: DeliveryRecord, _rateKey: string, _now: number) {
     this.records.set(record.id, { ...record });
     return true;
   }
@@ -145,6 +145,18 @@ async function create(deps: DeliveryDependencies) {
 }
 
 describe("manager-chat P&L delivery", () => {
+  it("ignores forged edge IP headers without a trusted hosting adapter", async () => {
+    const { deps, repository } = setup();
+    const create = vi.spyOn(repository, "create");
+    for (const address of ["192.0.2.1", "192.0.2.2"]) {
+      const input = request();
+      input.headers.set("cf-connecting-ip", address);
+      expect((await createDeliveryRequest(input, deps)).status).toBe(200);
+    }
+    const expected = await digest(`${deps.webhookSecret}:anonymous`);
+    expect(create.mock.calls[0][1]).toBe(expected);
+    expect(create.mock.calls[1][1]).toBe(expected);
+  });
   it("uses the configured template and accepts its single opaque marker after copy changes", async () => {
     const { deps, telegram } = setup();
     deps.messageTemplate =

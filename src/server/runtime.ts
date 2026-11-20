@@ -1,25 +1,15 @@
-import { AsyncLocalStorage } from "node:async_hooks";
 import { z } from "zod";
-import { D1DeliveryRepository } from "./d1-repository";
 import { TelegramGateway } from "./telegram";
 import type { DeliveryDependencies, CleanupDependencies } from "./delivery";
 import { createPnlWorkbook } from "../infrastructure/pnl-workbook";
-import { D1SettingsRepository } from "./settings-repository";
 import { createDefaultSettings } from "../application/site-settings";
 import type { SiteSettings } from "../domain/site-settings";
-import { D1AnalyticsRepository } from "./analytics-repository";
-
-export type DeliveryEnvironment = {
-  PNL_DB?: D1Database;
-  TELEGRAM_BOT_TOKEN?: string;
-  TELEGRAM_MANAGER_USER_ID?: string;
-  TELEGRAM_BUSINESS_CONNECTION_ID?: string;
-  TELEGRAM_WEBHOOK_SECRET?: string;
-  PNL_PUBLIC_ORIGIN?: string;
-  SITE_ORIGIN?: string;
-  ADMIN_BOOTSTRAP_EMAIL?: string;
-};
-const environments = new AsyncLocalStorage<DeliveryEnvironment>();
+import {
+  getApplicationRuntime,
+  type RuntimeEnvironment,
+} from "./runtime-context";
+import type { SettingsRepository } from "./settings-contracts";
+import type { AnalyticsRepository } from "./analytics-contracts";
 const configSchema = z.object({
   TELEGRAM_BOT_TOKEN: z.string().regex(/^[0-9]+:[A-Za-z0-9_-]{20,}$/),
   TELEGRAM_MANAGER_USER_ID: z.coerce.number().int().positive(),
@@ -31,29 +21,19 @@ const configSchema = z.object({
   }),
 });
 
-/** Supplies hosting bindings within one request, never a process-global secret. */
-export function runWithDeliveryRuntime<T>(
-  env: DeliveryEnvironment,
-  callback: () => T,
-): T {
-  return environments.run(env, callback);
-}
-
 /** Returns the current request's bindings without retaining credentials globally. */
-export function getRuntimeEnvironment(): DeliveryEnvironment | undefined {
-  return environments.getStore();
+export function getRuntimeEnvironment(): RuntimeEnvironment | undefined {
+  return getApplicationRuntime()?.environment;
 }
 
 /** Opens the settings adapter when durable storage is bound to this request. */
-export function getSettingsRepository(): D1SettingsRepository | null {
-  const db = environments.getStore()?.PNL_DB;
-  return db ? new D1SettingsRepository(db) : null;
+export function getSettingsRepository(): SettingsRepository | null {
+  return getApplicationRuntime()?.settings ?? null;
 }
 
 /** Opens the analytics adapter within the current request's storage scope. */
-export function getAnalyticsRepository(): D1AnalyticsRepository | null {
-  const db = environments.getStore()?.PNL_DB;
-  return db ? new D1AnalyticsRepository(db) : null;
+export function getAnalyticsRepository(): AnalyticsRepository | null {
+  return getApplicationRuntime()?.analytics ?? null;
 }
 
 /** Loads current settings; standalone calculator builds retain explicit defaults. */
@@ -69,7 +49,7 @@ export function getDeliveryStatus(): {
   deliveryReady: boolean;
   missing: string[];
 } {
-  const env = environments.getStore();
+  const env = getRuntimeEnvironment();
   const parsed = configSchema.safeParse(env);
   const labels: Record<string, string> = {
     TELEGRAM_BOT_TOKEN: "Токен бизнес-бота",
@@ -85,20 +65,21 @@ export function getDeliveryStatus(): {
           (issue) => labels[String(issue.path[0])] ?? "Конфигурация Telegram",
         ),
   );
-  if (!env?.PNL_DB) missing.add("База данных");
+  if (!getApplicationRuntime()?.delivery) missing.add("База данных");
   return { deliveryReady: missing.size === 0, missing: [...missing] };
 }
 
 /** Keeps retention available even while the administrator pauses new requests. */
 export function getCleanupRuntime(): CleanupDependencies | null {
-  const env = environments.getStore();
+  const env = getRuntimeEnvironment();
+  const repository = getApplicationRuntime()?.delivery;
   const secret = z
     .string()
     .regex(/^[A-Za-z0-9_-]{32,256}$/)
     .safeParse(env?.TELEGRAM_WEBHOOK_SECRET);
-  return env?.PNL_DB && secret.success
+  return repository && secret.success
     ? {
-        repository: new D1DeliveryRepository(env.PNL_DB),
+        repository,
         webhookSecret: secret.data,
       }
     : null;
@@ -106,9 +87,10 @@ export function getCleanupRuntime(): CleanupDependencies | null {
 
 /** Builds adapters from current durable settings and server-only credentials. */
 export async function getDeliveryRuntime(): Promise<DeliveryDependencies | null> {
-  const env = environments.getStore();
+  const env = getRuntimeEnvironment();
+  const repository = getApplicationRuntime()?.delivery;
   const parsed = configSchema.safeParse(env);
-  if (!parsed.success || !env?.PNL_DB) return null;
+  if (!parsed.success || !repository) return null;
   const config = parsed.data;
   const { telegram } = await getSiteSettings();
   if (
@@ -117,7 +99,7 @@ export async function getDeliveryRuntime(): Promise<DeliveryDependencies | null>
   )
     return null;
   return {
-    repository: new D1DeliveryRepository(env.PNL_DB),
+    repository,
     telegram: new TelegramGateway(config.TELEGRAM_BOT_TOKEN),
     managerTarget: telegram.managerUsername || telegram.managerPhone,
     messageTemplate: telegram.messageTemplate,
@@ -125,6 +107,10 @@ export async function getDeliveryRuntime(): Promise<DeliveryDependencies | null>
     businessConnectionId: config.TELEGRAM_BUSINESS_CONNECTION_ID,
     webhookSecret: config.TELEGRAM_WEBHOOK_SECRET,
     publicOrigin: config.PNL_PUBLIC_ORIGIN,
+    clientAddress:
+      getApplicationRuntime()?.platform === "sites"
+        ? (request) => request.headers.get("cf-connecting-ip") ?? undefined
+        : undefined,
     async workbook(payload) {
       const response = await fetch(
         `${config.PNL_PUBLIC_ORIGIN}/templates/coffee-market-pnl-3-months.xlsx`,

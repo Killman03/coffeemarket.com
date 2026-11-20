@@ -64,9 +64,9 @@ DELETE FROM pnl_updates WHERE created_at < (unixepoch() * 1000 - 7 * 86400000);
 
 ## Переносимость
 
-`src/server/contracts.ts` задаёт порт `DeliveryRepository`. `src/server/delivery.ts` содержит сценарий выдачи и не зависит от Cloudflare. `src/server/telegram.ts` использует стандартные `fetch`, `FormData` и Bot API. Только `d1-repository.ts` знает D1, а `runtime.ts` связывает окружение с адаптерами через request-scoped `AsyncLocalStorage`.
+`src/server/contracts.ts` задаёт порт DeliveryRepository. src/server/delivery.ts не зависит от Cloudflare, src/server/telegram.ts использует стандартные fetch/FormData/Bot API. D1-адаптер связывается с request-scoped runtime в sites-runtime.ts, PostgreSQL-адаптер — с процессным Node runtime при startup. Общий runtime.ts работает с портами.
 
-На другом хостинге замените D1-адаптер на постоянный PostgreSQL/SQLite repository с теми же атомарными гарантиями и передайте зависимости HTTP-обработчикам. Нельзя заменять его глобальным `Map` или локальным JSON-файлом в production. Standalone Next-сборка без собственного адаптера БД оставляет выдачу выключенной. В Django тот же сценарий можно реализовать в существующих views/services/models, не создавая отдельный микросервис.
+Для Node PostgreSQL repository и composition root уже реализованы; запуск — [POSTGRESQL.md](POSTGRESQL.md). Нужны отдельные реквизиты менеджера/бота, авторизация и эксплуатационная настройка перед реальной выдачей. В Django тот же сценарий можно реализовать средствами монолита. Глобальный Map и локальный JSON не заменяют постоянную БД.
 
 Excel формируется общим `createPnlWorkbook` из проверенного шаблона `public/templates/coffee-market-pnl-3-months.xlsx`. Входящая заявка не задаёт URL шаблона. Сервер загружает его только с настроенного origin, без redirects и с лимитом размера. Изменения шаблона проверяются workbook-тестами перед выпуском.
 

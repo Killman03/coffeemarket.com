@@ -23,6 +23,7 @@ export type DeliveryDependencies = {
   publicOrigin: string;
   workbook: (payload: PnlRequest) => Promise<ArrayBuffer>;
   now?: () => number;
+  clientAddress?: (request: Request) => string | undefined;
 };
 export type CleanupDependencies = Pick<
   DeliveryDependencies,
@@ -77,10 +78,10 @@ export async function createDeliveryRequest(
       .replaceAll("+", "-")
       .replaceAll("/", "_")
       .replaceAll("=", "");
-    // CF supplies this header at the trusted edge. Other hosts must inject a trusted
-    // client address or all clients share the conservative anonymous quota.
+    // Only the hosting adapter can identify a trusted client address. Direct
+    // Node deployments share a conservative quota until a trusted proxy is wired.
     const rateKey = await digest(
-      `${deps.webhookSecret}:${request.headers.get("cf-connecting-ip") ?? "anonymous"}`,
+      `${deps.webhookSecret}:${deps.clientAddress?.(request) ?? "anonymous"}`,
     );
     const expiresAt = now + 15 * 60_000;
     const { input, context, phone, analyticsSessionId } = parsed.data;
