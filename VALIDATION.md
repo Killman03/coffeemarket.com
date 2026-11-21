@@ -1,3 +1,11 @@
+# Независимая авторизация владельца — 21.11.2026
+
+Добавлены Better Auth 1.7.27 и официальный Drizzle adapter, отдельная PostgreSQL-миграция auth-таблиц, port ServerAuthentication и Node identity adapter. Вход — email/пароль заранее созданного владельца; HTTP-регистрация и самоназначение роли закрыты. Сессии в PostgreSQL, HttpOnly/Secure cookies на HTTPS, фиксированные 8 часов, немедленный отзыв при logout/reset. Операторские команды используют скрытый ввод пароля, отдельный ADMIN_DATABASE_URL, транзакции и аудит. Формулы и основной UI калькулятора сохранены; Sites использует прежний identity adapter.
+
+Прошли 178 unit/UI-тестов и 35 интеграционных тестов на настоящем PostgreSQL 17, включая настоящий Next standalone и рестарт сессии. Проверены подмена cookies/identity, чужой Origin, закрытая регистрация, owner-only доступ, expiry, конкурентные лимиты входа из двух пулов, гонка login/reset и откат credentials/session deletion при ошибке аудита. TypeScript, Node/Sites/widget builds, журнал миграций и npm audit (0 известных уязвимостей). Порядок настройки и ограничения — docs/NODE_AUTH.md. Фактический результат GitHub Actions относится к конкретному head коммита. Сервер пользователя и опубликованный Sites не переключаются автоматически.
+
+---
+
 # PostgreSQL и Node.js startup — 20.11.2026
 
 Сохранены интерфейс и расчётные формулы. Добавлены три PostgreSQL-адаптера через существующий Drizzle ORM/node-postgres и отдельные сгенерированные миграции drizzle-postgres; старые D1-миграции не менялись. Node получает зависимости штатным Next.js instrumentation hook. Прямой сервер не доверяет заголовкам Sites: админка закрыта до отдельной авторизации, публичный сбор аналитики работает через PostgreSQL.

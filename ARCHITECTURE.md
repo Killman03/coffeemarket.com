@@ -8,6 +8,8 @@
 
 ## Зависимости
 
+На Node.js `ServerAuthentication` в `src/server/auth-contracts.ts` отделяет прикладную проверку владельца от Better Auth. `src/server/node/authentication.ts` адаптирует PostgreSQL/Drizzle-сессии к identity; `app/admin/dependencies.ts` выбирает Node или Sites без доверия к клиентским identity-заголовкам. Учётные записи создаются только CLI, вместе с singleton owner и аудитом в одной транзакции. Миграции auth находятся отдельно от D1 в drizzle-postgres. Секреты не передаются UI, расчётные формулы не зависят от авторизации. Полный контракт и эксплуатация — [docs/NODE_AUTH.md](docs/NODE_AUTH.md).
+
 ```text
 app/page.tsx -> presentation -> application -> domain
                        infrastructure -> domain/application

@@ -5,6 +5,7 @@ import { fileURLToPath } from "node:url";
 import { spawn } from "node:child_process";
 import { createServer } from "node:net";
 import { once } from "node:events";
+import { randomBytes } from "node:crypto";
 import { setTimeout as delay } from "node:timers/promises";
 import { z } from "zod";
 import * as schema from "../../db/postgres/schema";
@@ -13,6 +14,14 @@ import { PostgresSettingsRepository } from "../../src/server/postgres/settings-r
 import { PostgresAnalyticsRepository } from "../../src/server/postgres/analytics-repository";
 import { PostgresDeliveryRepository } from "../../src/server/postgres/delivery-repository";
 import { createNodeRuntime } from "../../src/server/node/bootstrap";
+import { createNodeAuthentication } from "../../src/server/node/authentication";
+import {
+  createOwner,
+  resetOwnerPassword,
+  revokeOwnerSessions,
+} from "../../src/server/node/owner-management";
+import { hashPassword } from "better-auth/crypto";
+import { getAdminAccess, handleAdminSettings } from "../../src/server/admin";
 import { runWithApplicationRuntime } from "../../src/server/runtime-context";
 import { getSiteSettings } from "../../src/server/runtime";
 import { getAnalyticsDependencies } from "../../app/analytics-dependencies";
@@ -58,7 +67,7 @@ beforeAll(async () => {
 });
 beforeEach(async () => {
   await primary.db.execute(
-    sql`TRUNCATE TABLE analytics_sessions,analytics_events,pnl_requests,pnl_updates,site_owner,site_settings,site_settings_audit CASCADE`,
+    sql`TRUNCATE TABLE analytics_sessions,analytics_events,pnl_requests,pnl_updates,site_owner,site_settings,site_settings_audit,auth_user,auth_session,auth_account,auth_verification,auth_rate_limit,auth_audit CASCADE`,
   );
 });
 afterAll(async () => {
@@ -104,6 +113,14 @@ const ticket = (analyticsSessionId?: string): DeliveryRecord => ({
 
 describe("PostgreSQL migrations and lifecycle", () => {
   it("serves persisted settings, collects events and rejects forged owners after a real Node restart", async () => {
+    const secret = randomBytes(48).toString("base64url");
+    const credentials = {
+      email: "owner@example.com",
+      password: randomBytes(24).toString("base64url"),
+      name: "Владелец",
+    };
+    await createOwner(primary.db, credentials);
+    let cookie = "";
     const next = createDefaultSettings();
     next.content.calculatorTitle = "Сервер PostgreSQL";
     await settings.save(next, 0, "owner", now);
@@ -131,6 +148,7 @@ describe("PostgreSQL migrations and lifecycle", () => {
             STORAGE_DRIVER: "postgres",
             DATABASE_URL: testUrl.href,
             SITE_ORIGIN: origin,
+            BETTER_AUTH_SECRET: secret,
             HOSTNAME: "127.0.0.1",
             PORT: String(port),
           },
@@ -192,14 +210,69 @@ describe("PostgreSQL migrations and lifecycle", () => {
           "oai-authenticated-user-email": "owner@example.com",
         },
       });
-      expect(denied.status).toBe(503);
-      expect(await primary.db.select().from(schema.siteOwner)).toHaveLength(0);
+      expect(denied.status).toBe(401);
+      expect(await (await fetch(`${origin}/admin`)).text()).toContain(
+        "Email владельца",
+      );
+      const login = await fetch(`${origin}/api/auth/sign-in/email`, {
+        method: "POST",
+        headers: { origin, "content-type": "application/json" },
+        body: JSON.stringify({
+          email: credentials.email,
+          password: credentials.password,
+        }),
+      });
+      expect(login.status).toBe(200);
+      cookie = login.headers
+        .getSetCookie()
+        .map((value) => value.split(";")[0])
+        .join("; ");
+      expect(cookie).toContain("coffee-market.session_token=");
+      expect(
+        (await fetch(`${origin}/api/admin/settings`, { headers: { cookie } }))
+          .status,
+      ).toBe(200);
+      expect(
+        await (await fetch(`${origin}/admin`, { headers: { cookie } })).text(),
+      ).toContain("Сохранить изменения");
+      const ownerEvent = await fetch(`${origin}/api/analytics/events`, {
+        method: "POST",
+        headers: {
+          origin,
+          cookie,
+          "content-type": "application/json",
+          "x-coffeemarket-analytics": "1",
+        },
+        body: JSON.stringify(event()),
+      });
+      expect(ownerEvent.status).toBe(204);
+      expect(
+        await primary.db.select().from(schema.analyticsEvents),
+      ).toHaveLength(1);
     } finally {
       await stop();
     }
     const stopAgain = await start();
     try {
       expect(await (await fetch(origin)).text()).toContain("Сервер PostgreSQL");
+      expect(
+        (await fetch(`${origin}/api/admin/settings`, { headers: { cookie } }))
+          .status,
+      ).toBe(200);
+      expect(
+        (await fetch(`${origin}/api/admin/analytics`, { headers: { cookie } }))
+          .status,
+      ).toBe(400);
+      const signOut = await fetch(`${origin}/api/auth/sign-out`, {
+        method: "POST",
+        headers: { origin, cookie, "content-type": "application/json" },
+        body: "{}",
+      });
+      expect(signOut.status).toBe(200);
+      expect(
+        (await fetch(`${origin}/api/admin/settings`, { headers: { cookie } }))
+          .status,
+      ).toBe(401);
     } finally {
       await stopAgain();
     }
@@ -209,7 +282,7 @@ describe("PostgreSQL migrations and lifecycle", () => {
     const rows = await primary.db.execute(
       sql`SELECT count(*)::integer n FROM drizzle.__drizzle_migrations`,
     );
-    expect(rows.rows[0].n).toBe(1);
+    expect(rows.rows[0].n).toBe(2);
   });
   it("starts the Node composition root and observes live settings and analytics", async () => {
     const runtime = await createNodeRuntime({
@@ -255,6 +328,344 @@ describe("PostgreSQL migrations and lifecycle", () => {
         sql`DROP DATABASE ${sql.identifier(emptyName)} WITH (FORCE)`,
       );
     }
+  });
+});
+
+describe("Node owner authentication on PostgreSQL", () => {
+  const origin = "https://calculator.example.com";
+  const secret = randomBytes(48).toString("base64url");
+  const credentials = {
+    email: "owner@example.com",
+    password: randomBytes(24).toString("base64url"),
+    name: "Owner",
+  };
+  const config = { origin, secret };
+  const auth = () => createNodeAuthentication(primary.db, config);
+  const post = (
+    path: string,
+    body: unknown,
+    headers: Record<string, string> = {},
+  ) =>
+    new Request(`${origin}/api/auth/${path}`, {
+      method: "POST",
+      headers: { origin, "content-type": "application/json", ...headers },
+      body: JSON.stringify(body),
+    });
+  const cookieOf = (response: Response) =>
+    response.headers
+      .getSetCookie()
+      .map((value) => value.split(";")[0])
+      .join("; ");
+  const login = async () => {
+    const response = await auth().handle(post("sign-in/email", credentials));
+    expect(response.status).toBe(200);
+    return new Headers({ cookie: cookieOf(response) });
+  };
+  const deps = async (headers: Headers) => ({
+    repository: settings,
+    user: await auth().getIdentity(headers),
+    origin,
+    bootstrapEmail: undefined,
+    deliveryStatus: { deliveryReady: false, missing: [] },
+  });
+
+  it("creates exactly one owner under racing operator commands", async () => {
+    const results = await Promise.allSettled([
+      createOwner(primary.db, credentials),
+      createOwner(peer.db, { ...credentials, email: "other@example.com" }),
+    ]);
+    expect(
+      results.filter((result) => result.status === "fulfilled"),
+    ).toHaveLength(1);
+    expect(await primary.db.select().from(schema.authUser)).toHaveLength(1);
+    expect(await primary.db.select().from(schema.authAccount)).toHaveLength(1);
+    expect(await primary.db.select().from(schema.siteOwner)).toHaveLength(1);
+    expect(await primary.db.select().from(schema.authAudit)).toMatchObject([
+      { action: "owner_created" },
+    ]);
+    const [account] = await primary.db.select().from(schema.authAccount);
+    expect(account.password).not.toBe(credentials.password);
+    expect(
+      JSON.stringify(await primary.db.select().from(schema.authAudit)),
+    ).not.toContain(credentials.password);
+  });
+
+  it("rolls back owner provisioning and its audit together", async () => {
+    await primary.db.execute(
+      sql`ALTER TABLE auth_audit ADD CONSTRAINT test_reject_auth_audit CHECK (action <> 'owner_created')`,
+    );
+    try {
+      await expect(createOwner(primary.db, credentials)).rejects.toThrow();
+      expect(await primary.db.select().from(schema.authUser)).toHaveLength(0);
+      expect(await primary.db.select().from(schema.authAccount)).toHaveLength(
+        0,
+      );
+      expect(await primary.db.select().from(schema.siteOwner)).toHaveLength(0);
+    } finally {
+      await primary.db.execute(
+        sql`ALTER TABLE auth_audit DROP CONSTRAINT test_reject_auth_audit`,
+      );
+    }
+  });
+
+  it("issues secure cookies, validates stored sessions across instances and saves as the pinned owner", async () => {
+    const id = await createOwner(primary.db, credentials);
+    const response = await auth().handle(post("sign-in/email", credentials));
+    expect(response.status).toBe(200);
+    const setCookies = response.headers.getSetCookie().join(";");
+    expect(setCookies).toContain("HttpOnly");
+    expect(setCookies).toContain("Secure");
+    expect(setCookies).toContain("SameSite=Lax");
+    expect(response.headers.get("cache-control")).toContain("no-store");
+    const headers = new Headers({ cookie: cookieOf(response) });
+    expect(
+      await createNodeAuthentication(peer.db, config).getIdentity(headers),
+    ).toMatchObject({ userId: id, email: credentials.email });
+    const ownerDeps = await deps(headers);
+    expect(await getAdminAccess(ownerDeps)).toBe("authorized");
+    const saved = await handleAdminSettings(
+      new Request(`${origin}/api/admin/settings`, {
+        method: "PUT",
+        headers: {
+          origin,
+          "x-coffeemarket-admin": "1",
+          "content-type": "application/json",
+        },
+        body: JSON.stringify({
+          revision: 0,
+          settings: createDefaultSettings(),
+        }),
+      }),
+      ownerDeps,
+    );
+    expect(saved.status).toBe(200);
+    expect(
+      await primary.db.select().from(schema.siteSettingsAudit),
+    ).toMatchObject([{ actor: id }]);
+  });
+
+  it("rejects altered and expired cookies and ignores forged identity headers", async () => {
+    await createOwner(primary.db, credentials);
+    const headers = await login();
+    const forged = new Headers({
+      cookie: `${headers.get("cookie")}corrupted`,
+      "oai-authenticated-user-id": (await settings.getOwner())!.subject,
+    });
+    expect(await auth().getIdentity(forged)).toBeNull();
+    expect(
+      await auth().getIdentity(
+        new Headers({
+          "oai-authenticated-user-id": (await settings.getOwner())!.subject,
+          "oai-authenticated-user-email": credentials.email,
+        }),
+      ),
+    ).toBeNull();
+    await primary.db
+      .update(schema.authSession)
+      .set({ expiresAt: new Date(Date.now() - 1_000) });
+    expect(await auth().getIdentity(headers)).toBeNull();
+  });
+
+  it("does not grant ownership to another valid session, even if its email is the bootstrap email", async () => {
+    const owner = await createOwner(primary.db, credentials);
+    const outsider = crypto.randomUUID();
+    await primary.db
+      .insert(schema.authUser)
+      .values({ id: outsider, name: "Other", email: "other@example.com" });
+    await primary.db
+      .insert(schema.authAccount)
+      .values({
+        id: crypto.randomUUID(),
+        userId: outsider,
+        accountId: outsider,
+        providerId: "credential",
+        password: await hashPassword(credentials.password),
+      });
+    const response = await auth().handle(
+      post("sign-in/email", { ...credentials, email: "other@example.com" }),
+    );
+    expect(response.status).toBe(200);
+    const otherDeps = await deps(new Headers({ cookie: cookieOf(response) }));
+    expect(otherDeps.user?.userId).toBe(outsider);
+    expect(
+      await getAdminAccess({
+        ...otherDeps,
+        bootstrapEmail: "other@example.com",
+      }),
+    ).toBe("forbidden");
+    expect((await settings.getOwner())?.subject).toBe(owner);
+  });
+
+  it("revokes server sessions on logout and does not allow logout through GET or a foreign origin", async () => {
+    await createOwner(primary.db, credentials);
+    const headers = await login();
+    const cookie = headers.get("cookie")!;
+    expect(
+      (
+        await auth().handle(
+          new Request(`${origin}/api/auth/sign-out`, { headers }),
+        )
+      ).status,
+    ).toBe(405);
+    expect(
+      (
+        await auth().handle(
+          post("sign-out", {}, { cookie, origin: "https://evil.example" }),
+        )
+      ).status,
+    ).toBe(403);
+    expect(await auth().getIdentity(headers)).not.toBeNull();
+    expect((await auth().handle(post("sign-out", {}, { cookie }))).status).toBe(
+      200,
+    );
+    expect(await auth().getIdentity(headers)).toBeNull();
+  });
+
+  it("rejects public signup, self-service endpoints, cross-origin login and oversized bodies", async () => {
+    await createOwner(primary.db, credentials);
+    for (const path of [
+      "sign-up/email",
+      "change-email",
+      "delete-user",
+      "request-password-reset",
+      "update-user",
+      "change-password",
+      "link-social",
+    ]) {
+      expect((await auth().handle(post(path, credentials))).status).toBe(404);
+    }
+    expect(
+      (
+        await auth().handle(
+          post("sign-in/email", credentials, {
+            origin: "https://evil.example",
+          }),
+        )
+      ).status,
+    ).toBe(403);
+    const noOrigin = post("sign-in/email", credentials);
+    noOrigin.headers.delete("origin");
+    expect((await auth().handle(noOrigin)).status).toBe(403);
+    expect(
+      (
+        await auth().handle(
+          post("sign-in/email", {
+            ...credentials,
+            password: "a".repeat(9_000),
+          }),
+        )
+      ).status,
+    ).toBe(400);
+    expect(await primary.db.select().from(schema.authSession)).toHaveLength(0);
+    expect(await primary.db.select().from(schema.authUser)).toHaveLength(1);
+  });
+
+  it("atomically limits concurrent login attempts across pools despite spoofed IP headers", async () => {
+    await createOwner(primary.db, credentials);
+    const attempts = await Promise.all(
+      Array.from({ length: 8 }, (_, index) =>
+        createNodeAuthentication(
+          index % 2 ? primary.db : peer.db,
+          config,
+        ).handle(
+          post(
+            "sign-in/email",
+            { ...credentials, password: "incorrect-password" },
+            {
+              "x-forwarded-for": `192.0.2.${index + 1}`,
+              "cf-connecting-ip": `198.51.100.${index + 1}`,
+            },
+          ),
+        ),
+      ),
+    );
+    expect(attempts.filter((response) => response.status === 401)).toHaveLength(
+      5,
+    );
+    expect(attempts.filter((response) => response.status === 429)).toHaveLength(
+      3,
+    );
+    const throttled = attempts.find((response) => response.status === 429)!;
+    expect(Number(throttled.headers.get("x-retry-after"))).toBeGreaterThan(0);
+    expect(await primary.db.select().from(schema.authRateLimit)).toHaveLength(
+      1,
+    );
+  });
+
+  it("changes the password atomically, revokes sessions and refuses to reset another account", async () => {
+    await createOwner(primary.db, credentials);
+    const headers = await login();
+    const replacement = randomBytes(24).toString("base64url");
+    await expect(
+      resetOwnerPassword(primary.db, "other@example.com", replacement),
+    ).rejects.toThrow("не найден");
+    expect(await auth().getIdentity(headers)).not.toBeNull();
+    await resetOwnerPassword(peer.db, credentials.email, replacement);
+    expect(await auth().getIdentity(headers)).toBeNull();
+    expect(
+      (await auth().handle(post("sign-in/email", credentials))).status,
+    ).toBe(401);
+    expect(
+      (
+        await auth().handle(
+          post("sign-in/email", { ...credentials, password: replacement }),
+        )
+      ).status,
+    ).toBe(200);
+    expect(await primary.db.select().from(schema.authAudit)).toMatchObject([
+      { action: "owner_created" },
+      { action: "password_reset" },
+    ]);
+  });
+
+  it("serializes password reset with in-flight login so old credentials cannot leave a session", async () => {
+    await createOwner(primary.db, credentials);
+    const replacement = randomBytes(24).toString("base64url");
+    const [response] = await Promise.all([
+      auth().handle(post("sign-in/email", credentials)),
+      resetOwnerPassword(peer.db, credentials.email, replacement),
+    ]);
+    if (response.status === 200)
+      expect(
+        await auth().getIdentity(new Headers({ cookie: cookieOf(response) })),
+      ).toBeNull();
+    else expect(response.status).toBe(401);
+    expect(await primary.db.select().from(schema.authSession)).toHaveLength(0);
+  });
+
+  it("rolls back password changes and session revocation if the audit write fails", async () => {
+    await createOwner(primary.db, credentials);
+    const headers = await login();
+    const [before] = await primary.db.select().from(schema.authAccount);
+    await primary.db.execute(
+      sql`ALTER TABLE auth_audit ADD CONSTRAINT test_reject_password_audit CHECK (action <> 'password_reset')`,
+    );
+    try {
+      await expect(
+        resetOwnerPassword(
+          primary.db,
+          credentials.email,
+          randomBytes(24).toString("base64url"),
+        ),
+      ).rejects.toThrow();
+      const [after] = await primary.db.select().from(schema.authAccount);
+      expect(after.password).toBe(before.password);
+      expect(await auth().getIdentity(headers)).not.toBeNull();
+    } finally {
+      await primary.db.execute(
+        sql`ALTER TABLE auth_audit DROP CONSTRAINT test_reject_password_audit`,
+      );
+    }
+  });
+
+  it("revokes every owner session from the operator command", async () => {
+    await createOwner(primary.db, credentials);
+    const first = await login(),
+      second = await login();
+    await revokeOwnerSessions(peer.db);
+    expect(await auth().getIdentity(first)).toBeNull();
+    expect(await auth().getIdentity(second)).toBeNull();
+    expect(await primary.db.select().from(schema.authAudit)).toHaveLength(2);
   });
 });
 

@@ -10,12 +10,14 @@ const schema = z.discriminatedUnion("STORAGE_DRIVER", [
     ...common,
     STORAGE_DRIVER: z.literal("demo"),
     DATABASE_URL: z.undefined().optional(),
+    BETTER_AUTH_SECRET: z.undefined().optional(),
   }),
   z.object({
     ...common,
     STORAGE_DRIVER: z.literal("postgres"),
     SITE_ORIGIN: siteOriginSchema,
     DATABASE_URL: z.url({ protocol: /^(postgres|postgresql)$/ }),
+    BETTER_AUTH_SECRET: z.string().min(32).max(512).optional(),
   }),
 ]);
 export type NodeConfiguration = z.infer<typeof schema>;

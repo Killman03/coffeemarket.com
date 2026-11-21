@@ -1,4 +1,12 @@
 import { sql } from "drizzle-orm";
+export {
+  authUser,
+  authSession,
+  authAccount,
+  authVerification,
+  authRateLimit,
+  authAudit,
+} from "./auth-schema";
 import {
   bigint,
   check,

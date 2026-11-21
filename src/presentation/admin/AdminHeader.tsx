@@ -1,5 +1,6 @@
 import { Coffee, LogOut, ChartNoAxesCombined, Settings2 } from "lucide-react";
 import styles from "./AdminHeader.module.css";
+import { AdminSignOut } from "./AdminSignOut";
 
 /** Shares owner identity and navigation across protected administration pages.
  *
@@ -13,9 +14,11 @@ import styles from "./AdminHeader.module.css";
 export function AdminHeader({
   userDisplayName,
   active,
+  authMode = "sites",
 }: {
   userDisplayName: string;
   active: "settings" | "analytics";
+  authMode?: "sites" | "password";
 }) {
   return (
     <header className={styles.header}>
@@ -43,14 +46,18 @@ export function AdminHeader({
       </nav>
       <div className={styles.account}>
         <span>{userDisplayName}</span>
-        <a
-          href="/signout-with-chatgpt?return_to=%2Fadmin"
-          target="_top"
-          aria-label="Выйти из аккаунта"
-        >
-          <LogOut size={17} />
-          <span>Выйти</span>
-        </a>
+        {authMode === "password" ? (
+          <AdminSignOut />
+        ) : (
+          <a
+            href="/signout-with-chatgpt?return_to=%2Fadmin"
+            target="_top"
+            aria-label="Выйти из аккаунта"
+          >
+            <LogOut size={17} />
+            <span>Выйти</span>
+          </a>
+        )}
       </div>
     </header>
   );

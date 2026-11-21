@@ -1,0 +1,97 @@
+.form {
+  display: grid;
+  gap: 10px;
+  margin-top: 24px;
+}
+.form label {
+  font-size: 14px;
+  font-weight: 600;
+  margin-top: 8px;
+}
+.form input {
+  box-sizing: border-box;
+  width: 100%;
+  min-height: 48px;
+  border: 1px solid #b8a99b;
+  border-radius: 10px;
+  background: #fff;
+  padding: 12px 14px;
+  color: #30261f;
+  font: inherit;
+  font-size: 16px;
+}
+.form input[aria-invalid="true"] {
+  border-color: #a53629;
+}
+.form :is(input, button):focus-visible {
+  outline: 3px solid #ad875b;
+  outline-offset: 3px;
+}
+.password {
+  position: relative;
+}
+.password input {
+  padding-right: 52px;
+}
+.password button {
+  position: absolute;
+  right: 4px;
+  top: 4px;
+  width: 40px;
+  height: 40px;
+  display: grid;
+  place-items: center;
+  color: #5c4b3c;
+  background: transparent;
+  border: 0;
+  border-radius: 8px;
+  cursor: pointer;
+}
+.submit {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  min-height: 50px;
+  border: 0;
+  border-radius: 12px;
+  background: #503623;
+  color: #fff;
+  font: inherit;
+  font-weight: 600;
+  font-size: 16px;
+  padding: 14px;
+  margin-top: 12px;
+  cursor: pointer;
+}
+.submit:hover {
+  background: #342317;
+}
+.submit:disabled {
+  opacity: 0.65;
+  cursor: wait;
+}
+.form .error {
+  color: #a53629;
+  font-size: 14px;
+  margin: 0;
+}
+.form .help {
+  font-size: 14px;
+  line-height: 1.6;
+  color: #685b50;
+  margin: 6px 0 0;
+}
+.spinner {
+  animation: spin 1s linear infinite;
+}
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .spinner {
+    animation: none;
+  }
+}

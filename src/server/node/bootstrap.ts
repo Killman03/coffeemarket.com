@@ -11,6 +11,7 @@ import {
   type RuntimeEnvironment,
 } from "../runtime-context";
 import { readNodeConfiguration } from "./config";
+import { createNodeAuthentication } from "./authentication";
 
 /** Creates server-owned adapters, failing startup for an unreachable/unmigrated DB.
  *
@@ -59,6 +60,13 @@ export async function createNodeRuntime(
     await db.select().from(schema.analyticsEvents).limit(0);
     await db.select().from(schema.pnlRequests).limit(0);
     await db.select().from(schema.pnlUpdates).limit(0);
+    if (config.BETTER_AUTH_SECRET) {
+      await db.select().from(schema.authUser).limit(0);
+      await db.select().from(schema.authAccount).limit(0);
+      await db.select().from(schema.authSession).limit(0);
+      await db.select().from(schema.authRateLimit).limit(0);
+      await db.select().from(schema.authVerification).limit(0);
+    }
   } catch {
     await pool.end();
     throw new Error(
@@ -71,6 +79,14 @@ export async function createNodeRuntime(
     settings: new PostgresSettingsRepository(db),
     analytics: new PostgresAnalyticsRepository(db),
     delivery: new PostgresDeliveryRepository(db),
+    ...(config.BETTER_AUTH_SECRET
+      ? {
+          authentication: createNodeAuthentication(db, {
+            origin: config.SITE_ORIGIN,
+            secret: config.BETTER_AUTH_SECRET,
+          }),
+        }
+      : {}),
     async ready() {
       await db.execute(sql`select 1`);
       return true;

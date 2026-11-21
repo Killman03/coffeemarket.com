@@ -18,7 +18,7 @@ npm run build:portable
 npm run start:portable
 ```
 
-Без конфигурации сохраняется demo. Next standalone содержит public и static благодаря scripts/prepare-standalone.mjs. Docker runner по умолчанию требует PostgreSQL, отдельный migrator запускает Drizzle Kit. Хранилище Telegram подключено, но реальная выдача требует конфигурации менеджера/бота. Админка Node закрыта до отдельной авторизации; публичный сбор аналитики от неё не зависит.
+Без конфигурации сохраняется demo. Next standalone содержит public и static благодаря scripts/prepare-standalone.mjs. Docker runner по умолчанию требует PostgreSQL, отдельный migrator запускает Drizzle Kit. Хранилище Telegram подключено, но реальная выдача требует конфигурации менеджера/бота. Вход владельца на Node реализован через Better Auth: настройка BETTER_AUTH_SECRET, отдельные права и операторская команда создания владельца описаны в [docs/NODE_AUTH.md](docs/NODE_AUTH.md). Публичный сбор аналитики от входа не зависит.
 
 ## Подключение менеджера позже
 

@@ -40,6 +40,7 @@ describe("Node server configuration", () => {
       { STORAGE_DRIVER: "other" },
       { PG_POOL_MAX: "0" },
       { PG_POOL_MAX: "101" },
+      { BETTER_AUTH_SECRET: "short-secret-value" },
     ]) {
       expect(() => readNodeConfiguration({ ...valid, ...invalid })).toThrow(
         "Invalid server configuration",
@@ -50,5 +51,22 @@ describe("Node server configuration", () => {
         expect(String(error)).not.toContain("secret-value");
       }
     }
+  });
+  it("allows a public-only server but never silently accepts an invalid auth secret", () => {
+    const config = {
+      STORAGE_DRIVER: "postgres",
+      DATABASE_URL: "postgresql://localhost/app",
+      SITE_ORIGIN: "https://example.com",
+    };
+    expect(readNodeConfiguration(config).STORAGE_DRIVER).toBe("postgres");
+    expect(() =>
+      readNodeConfiguration({ ...config, BETTER_AUTH_SECRET: "" }),
+    ).toThrow("BETTER_AUTH_SECRET");
+    expect(() =>
+      readNodeConfiguration({
+        STORAGE_DRIVER: "demo",
+        BETTER_AUTH_SECRET: "a".repeat(32),
+      }),
+    ).toThrow("BETTER_AUTH_SECRET");
   });
 });
