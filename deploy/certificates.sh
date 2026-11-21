@@ -8,6 +8,7 @@ container=${CALCULATOR_NGINX_CONTAINER:-coffeemarket_nginx_prod}
 domain=$(cat "$configuration/domain")
 acme=/etc/letsencrypt/coffee-market-calculator
 webroot=/etc/letsencrypt/coffee-market-calculator-webroot
+[[ ! -L "$acme" && ! -L "$webroot" ]] || { echo 'Calculator certificate paths must not be symlinks.' >&2; exit 1; }
 install -d -m 700 "$acme" "$configuration/acme-work" "$configuration/acme-logs"
 install -d -m 755 "$webroot/.well-known/acme-challenge"
 exec 9>"$configuration/certificate-operation.lock"

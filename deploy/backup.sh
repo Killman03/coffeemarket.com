@@ -3,6 +3,7 @@ set -euo pipefail
 [[ $(id -u) = 0 ]] || { echo 'Run this operation as root.' >&2; exit 1; }
 repository=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
 directory=${CALCULATOR_BACKUP_DIR:-/var/backups/coffee-market-calculator}
+[[ "$directory" = /* && ! -L "$directory" ]] || { echo 'Use an absolute, non-symlink backup directory.' >&2; exit 1; }
 install -d -m 700 "$directory"
 available=$(df -Pk "$directory" | awk 'NR == 2 { print $4 }')
 (( available >= 1048576 )) || { echo 'Less than 1 GiB disk available; check backup storage.' >&2; exit 1; }

@@ -13,10 +13,11 @@ const operator = createPostgresDatabase({
   connectionString: process.env.ADMIN_DATABASE_URL,
   max: 1,
 });
-const origin = "http://127.0.0.1:3107";
+const origin = "https://calculator.example.com";
 const internal = "http://calculator-web:3000";
 const email = "compose-owner@example.com",
-  password = randomBytes(24).toString("base64url");
+  password = process.env.COMPOSE_SMOKE_PASSWORD;
+assert.ok(password && password.length >= 32);
 try {
   await createOwner(operator.db, {
     email,
@@ -26,7 +27,7 @@ try {
   const request = (route: string, init?: RequestInit) =>
     fetch(`${internal}${route}`, {
       ...init,
-      headers: { host: "127.0.0.1:3107", ...init?.headers },
+      headers: { host: "calculator.example.com", ...init?.headers },
     });
   assert.equal((await request("/api/admin/settings")).status, 401);
   const login = await request("/api/auth/sign-in/email", {
@@ -67,6 +68,7 @@ try {
     (await request("/api/admin/settings", { headers: { cookie } })).status,
     401,
   );
+  await resetOwnerPassword(operator.db, email, password);
   console.log(
     "Compose smoke passed: restricted roles, auth, settings/audit and revocation.",
   );

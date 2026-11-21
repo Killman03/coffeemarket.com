@@ -5,6 +5,7 @@ revision=${1:?Supply the tested commit SHA}
 origin=${2:?Supply the canonical HTTPS origin}
 repository=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
 configuration=${CALCULATOR_CONFIG_DIR:-/etc/coffee-market-calculator}
+[[ "$configuration" = /* && ! -L "$configuration" ]] || { echo 'Use an absolute, non-symlink configuration directory.' >&2; exit 1; }
 registry_configuration=${CALCULATOR_DOCKER_CONFIG:-/root/.docker-coffee-calculator}
 network=${CALCULATOR_PROXY_NETWORK:-coffeemarketkz_coffeemarket_network}
 [[ $(git -C "$repository" rev-parse HEAD) = "$revision" ]] || { echo 'Checkout and image revision must match.' >&2; exit 1; }
