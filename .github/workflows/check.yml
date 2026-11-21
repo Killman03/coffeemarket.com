@@ -56,6 +56,8 @@ jobs:
         run: |
           docker build --target migrator --tag coffee-market-migrator:ci .
           docker build --target runner --tag coffee-market-server:ci .
+      - name: Verify isolated Compose deployment and Nginx rollback
+        run: bash deploy/verify-compose.sh
       - name: Verify container migrations and application readiness
         env:
           DATABASE_URL: ${{ env.TEST_DATABASE_URL }}
@@ -106,3 +108,34 @@ jobs:
       - name: Scan every commit with redacted output
         shell: bash
         run: '"$RUNNER_TEMP/gitleaks" git --redact --no-banner --log-opts="--all" .'
+
+  publish:
+    name: Publish tested server images
+    needs: [verify, secrets]
+    if: github.event_name == 'push' && !startsWith(github.ref, 'refs/heads/dependabot/')
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - name: Check out the tested source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+      - name: Build immutable revision images
+        run: |
+          registry="ghcr.io/${GITHUB_REPOSITORY_OWNER,,}"
+          docker build --target runner --label "org.opencontainers.image.source=https://github.com/$GITHUB_REPOSITORY" \
+            --label "org.opencontainers.image.revision=$GITHUB_SHA" --tag "$registry/coffeemarket-calculator:$GITHUB_SHA" .
+          docker build --target migrator --label "org.opencontainers.image.source=https://github.com/$GITHUB_REPOSITORY" \
+            --label "org.opencontainers.image.revision=$GITHUB_SHA" --tag "$registry/coffeemarket-calculator-migrator:$GITHUB_SHA" .
+      - name: Publish to the repository's container registry
+        env:
+          REGISTRY_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          registry="ghcr.io/${GITHUB_REPOSITORY_OWNER,,}"
+          printf '%s' "$REGISTRY_TOKEN" | docker login ghcr.io --username "$GITHUB_ACTOR" --password-stdin
+          docker push "$registry/coffeemarket-calculator:$GITHUB_SHA"
+          docker push "$registry/coffeemarket-calculator-migrator:$GITHUB_SHA"
+          docker logout ghcr.io

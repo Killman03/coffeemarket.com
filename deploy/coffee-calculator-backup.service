@@ -1,0 +1,8 @@
+[Unit]
+Description=Back up the independent Coffee Market calculator database
+After=docker.service
+Requires=docker.service
+
+[Service]
+Type=oneshot
+ExecStart=/bin/bash /opt/coffee-market-calculator/deploy/backup.sh
