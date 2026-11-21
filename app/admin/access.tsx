@@ -3,6 +3,11 @@ import { getAdminDependencies } from "./dependencies";
 import { getAdminAccess, type AdminDependencies } from "../../src/server/admin";
 import { AdminEntry } from "../../src/presentation/AdminEntry";
 import { chatGPTSignInPath, chatGPTSignOutPath } from "../chatgpt-auth";
+import { getApplicationRuntime } from "../../src/server/runtime-context";
+
+export function getAdminAuthMode(): "sites" | "password" {
+  return getApplicationRuntime()?.platform === "node" ? "password" : "sites";
+}
 
 /** Renders protected pages through one fail-closed owner authorization boundary.
  *
@@ -18,6 +23,8 @@ export async function renderOwnerPage(
   render: (deps: AdminDependencies) => Promise<ReactNode>,
 ) {
   const paths = {
+    authMode: getAdminAuthMode(),
+    returnTo,
     signInPath: chatGPTSignInPath(returnTo),
     signOutPath: chatGPTSignOutPath(returnTo),
   };

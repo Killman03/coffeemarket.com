@@ -35,6 +35,7 @@ import { AdminHeader } from "./AdminHeader";
 
 type Section = "telegram" | "defaults" | "content";
 type AdminPanelProps = {
+  authMode?: "sites" | "password";
   initial: SettingsEnvelope;
   userDisplayName: string;
   status?: { deliveryReady: boolean; missing: string[] };
@@ -219,6 +220,7 @@ async function saveSettings(payload: {
 export function AdminPanel({
   initial,
   userDisplayName,
+  authMode = "sites",
   status = { deliveryReady: false, missing: [] },
   onSave = saveSettings,
 }: AdminPanelProps) {
@@ -349,7 +351,11 @@ export function AdminPanel({
   return (
     <main className={styles.root}>
       <div className={styles.shell}>
-        <AdminHeader userDisplayName={userDisplayName} active="settings" />
+        <AdminHeader
+          userDisplayName={userDisplayName}
+          active="settings"
+          authMode={authMode}
+        />
         <div className={styles.heading}>
           <div>
             <a className={styles.back} href="/">

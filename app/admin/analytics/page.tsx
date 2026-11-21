@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { renderOwnerPage } from "../access";
+import { renderOwnerPage, getAdminAuthMode } from "../access";
 import { getAnalyticsRepository } from "../../../src/server/runtime";
 import { defaultAnalyticsFilter } from "../../../src/domain/analytics";
 import { AnalyticsDashboard } from "../../../src/presentation/admin/AnalyticsDashboard";
@@ -26,6 +26,7 @@ export default async function AnalyticsPage() {
     const settings = await deps.repository.get();
     return (
       <AnalyticsDashboard
+        authMode={getAdminAuthMode()}
         initial={initial}
         initialFilter={filter}
         userDisplayName={deps.user!.displayName}

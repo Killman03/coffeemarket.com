@@ -85,11 +85,13 @@ export function AnalyticsDashboard({
   initialFilter,
   userDisplayName,
   deliveryReady,
+  authMode = "sites",
 }: {
   initial: AnalyticsReport | null;
   initialFilter: AnalyticsFilter;
   userDisplayName: string;
   deliveryReady: boolean;
+  authMode?: "sites" | "password";
 }) {
   const [report, setReport] = useState(initial),
     [filters, setFilters] = useState<FilterDraft>(draft(initialFilter));
@@ -205,7 +207,11 @@ export function AnalyticsDashboard({
   return (
     <main className={styles.page}>
       <div className={styles.shell}>
-        <AdminHeader userDisplayName={userDisplayName} active="analytics" />
+        <AdminHeader
+          userDisplayName={userDisplayName}
+          active="analytics"
+          authMode={authMode}
+        />
         <div className={styles.heading}>
           <div>
             <a href="/" className={styles.back}>

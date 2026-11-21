@@ -2,6 +2,7 @@ import { AsyncLocalStorage } from "node:async_hooks";
 import type { SettingsRepository } from "./settings-contracts";
 import type { AnalyticsRepository } from "./analytics-contracts";
 import type { DeliveryRepository } from "./contracts";
+import type { ServerAuthentication } from "./auth-contracts";
 
 export type RuntimeEnvironment = {
   SITE_ORIGIN?: string;
@@ -19,6 +20,7 @@ export type ApplicationRuntime = {
   settings: SettingsRepository | null;
   analytics: AnalyticsRepository | null;
   delivery: DeliveryRepository | null;
+  authentication?: ServerAuthentication;
   ready(): Promise<boolean>;
   close(): Promise<void>;
 };

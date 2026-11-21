@@ -71,7 +71,7 @@
 
 Миграция 0002 добавляет analytics_sessions, analytics_events и nullable analytics_session_id заявки с индексом. Старые SQL-миграции неизменны. SQL проверяется настоящим SQLite с foreign keys и транзакциями; тестовый D1 adapter общий для settings/delivery/analytics. Нет runtime DDL, новых OAuth/session стеков, изменений Django или внешних сетевых интеграций.
 
-AnalyticsRepository для PostgreSQL реализован, Node runtime подключает его при startup. Публичный сбор работает без админки; чтение отчётов остаётся закрытым до независимой авторизации. Инварианты проверяются на реальном PostgreSQL, включая сравнение с D1. Конфигурация — [POSTGRESQL.md](POSTGRESQL.md). Для Django остаётся отдельный вариант с имеющейся авторизацией/моделями. Встроенный виджет по умолчанию не делает запросов к analytics API.
+AnalyticsRepository для PostgreSQL реализован, Node runtime подключает его при startup. Публичный сбор работает без админки; чтение отчётов доступно владельцу через Better Auth, а его посещения исключаются. Настройка входа — [NODE_AUTH.md](NODE_AUTH.md). Инварианты проверяются на реальном PostgreSQL, включая сравнение с D1. Конфигурация — [POSTGRESQL.md](POSTGRESQL.md). Для Django остаётся отдельный вариант с имеющейся авторизацией/моделями. Встроенный виджет по умолчанию не делает запросов к analytics API.
 
 ## Проверка
 
