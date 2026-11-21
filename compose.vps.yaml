@@ -1,0 +1,142 @@
+name: coffee-market-calculator
+
+x-logging: &logging
+  driver: local
+  options:
+    max-size: "10m"
+    max-file: "3"
+
+services:
+  calculator-db:
+    image: postgres:17-bookworm
+    restart: unless-stopped
+    env_file:
+      - ${CALCULATOR_CONFIG_DIR:?}/database.env
+    command:
+      [
+        "postgres",
+        "-c",
+        "shared_buffers=64MB",
+        "-c",
+        "max_connections=20",
+        "-c",
+        "work_mem=4MB",
+        "-c",
+        "maintenance_work_mem=32MB",
+      ]
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+      - ./deploy/postgres/001-roles.sql:/docker-entrypoint-initdb.d/001-roles.sql:ro
+    networks: [backend]
+    mem_limit: 384m
+    memswap_limit: 384m
+    cpus: 0.5
+    pids_limit: 128
+    shm_size: 128m
+    stop_grace_period: 60s
+    security_opt: ["no-new-privileges:true"]
+    logging: *logging
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d coffee_market"]
+      interval: 10s
+      timeout: 5s
+      retries: 6
+      start_period: 30s
+
+  calculator-web:
+    image: ghcr.io/killman03/coffeemarket-calculator:${CALCULATOR_REVISION:?}
+    restart: unless-stopped
+    init: true
+    env_file:
+      - ${CALCULATOR_CONFIG_DIR:?}/application.env
+    environment:
+      NODE_OPTIONS: --max-old-space-size=320
+    ports:
+      - "127.0.0.1:${CALCULATOR_PORT:-3107}:3000"
+    networks:
+      backend:
+      proxy:
+        aliases: [coffee-calculator-web]
+    depends_on:
+      calculator-db:
+        condition: service_healthy
+    mem_limit: 512m
+    memswap_limit: 512m
+    cpus: 0.75
+    pids_limit: 128
+    read_only: true
+    tmpfs:
+      - /tmp:rw,nosuid,noexec,size=64m,mode=1777
+      - /app/.next-node/cache:rw,nosuid,noexec,size=32m,uid=1000,gid=1000
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
+    stop_grace_period: 30s
+    logging: *logging
+
+  migrate:
+    image: ghcr.io/killman03/coffeemarket-calculator-migrator:${CALCULATOR_REVISION:?}
+    profiles: [operations]
+    env_file:
+      - ${CALCULATOR_CONFIG_DIR:?}/migration.env
+    networks: [backend]
+    depends_on:
+      calculator-db:
+        condition: service_healthy
+    mem_limit: 384m
+    memswap_limit: 384m
+    cpus: 0.5
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
+    logging: *logging
+
+  grant:
+    image: postgres:17-bookworm
+    profiles: [operations]
+    env_file:
+      - ${CALCULATOR_CONFIG_DIR:?}/database.env
+    entrypoint: ["/bin/sh", "-ec"]
+    command:
+      [
+        'export PGPASSWORD="$$POSTGRES_PASSWORD"; exec psql -h calculator-db -U postgres -d coffee_market -v ON_ERROR_STOP=1 -f /grants.sql',
+      ]
+    volumes:
+      - ./deploy/postgres/grants.sql:/grants.sql:ro
+    networks: [backend]
+    depends_on:
+      calculator-db:
+        condition: service_healthy
+    mem_limit: 96m
+    memswap_limit: 96m
+    cpus: 0.25
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
+    logging: *logging
+
+  operator:
+    image: ghcr.io/killman03/coffeemarket-calculator-migrator:${CALCULATOR_REVISION:?}
+    profiles: [operations]
+    command: ["npm", "run", "admin:create"]
+    env_file:
+      - ${CALCULATOR_CONFIG_DIR:?}/operator.env
+    stdin_open: true
+    tty: true
+    networks: [backend]
+    depends_on:
+      calculator-db:
+        condition: service_healthy
+    mem_limit: 256m
+    memswap_limit: 256m
+    cpus: 0.5
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
+    logging: *logging
+
+networks:
+  backend:
+    internal: true
+  proxy:
+    external: true
+    name: ${CALCULATOR_PROXY_NETWORK:?}
+
+volumes:
+  postgres-data:
